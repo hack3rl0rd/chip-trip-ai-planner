@@ -47,17 +47,49 @@ const Planning = () => {
     return true;
   };
 
-  const quickPicks = [
-    { name: "Đà Nẵng", emoji: "🏖️" },
-    { name: "Đà Lạt", emoji: "🌸" },
-    { name: "Hà Nội", emoji: "🏛️" },
-    { name: "Phú Quốc", emoji: "🌴" },
-    { name: "Nha Trang", emoji: "🐚" },
-    { name: "Sapa", emoji: "🏔️" },
+  const regions = [
+    {
+      label: "Miền Bắc",
+      emoji: "🏛️",
+      places: [
+        { name: "Hà Nội", emoji: "🏛️" },
+        { name: "Sapa", emoji: "🏔️" },
+        { name: "Hạ Long", emoji: "🛶" },
+        { name: "Ninh Bình", emoji: "⛰️" },
+        { name: "Hà Giang", emoji: "🌄" },
+        { name: "Mai Châu", emoji: "🌾" },
+      ],
+    },
+    {
+      label: "Miền Trung",
+      emoji: "🏖️",
+      places: [
+        { name: "Đà Nẵng", emoji: "🏖️" },
+        { name: "Hội An", emoji: "🏮" },
+        { name: "Huế", emoji: "👑" },
+        { name: "Nha Trang", emoji: "🐚" },
+        { name: "Quy Nhơn", emoji: "🌊" },
+        { name: "Phong Nha", emoji: "🦇" },
+      ],
+    },
+    {
+      label: "Miền Nam",
+      emoji: "🌴",
+      places: [
+        { name: "Phú Quốc", emoji: "🌴" },
+        { name: "Đà Lạt", emoji: "🌸" },
+        { name: "TP.HCM", emoji: "🏙️" },
+        { name: "Vũng Tàu", emoji: "⛱️" },
+        { name: "Cần Thơ", emoji: "🚣" },
+        { name: "Côn Đảo", emoji: "🐢" },
+      ],
+    },
   ];
 
+  const allPlaces = regions.flatMap(r => r.places);
+
   const filteredSuggestions = destination.length > 0
-    ? quickPicks.filter(p => p.name.toLowerCase().includes(destination.toLowerCase()) && p.name.toLowerCase() !== destination.toLowerCase())
+    ? allPlaces.filter(p => p.name.toLowerCase().includes(destination.toLowerCase()) && p.name.toLowerCase() !== destination.toLowerCase())
     : [];
 
   const steps = [
@@ -92,17 +124,26 @@ const Planning = () => {
           </div>
         )}
       </div>
-      {/* Quick picks */}
+      {/* Regions */}
       {!destination && (
-        <div className="flex flex-wrap justify-center gap-2 max-w-lg">
-          {quickPicks.map(p => (
-            <button
-              key={p.name}
-              onClick={() => setDestination(p.name)}
-              className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-border bg-card hover:border-chip-orange/40 hover:shadow-warm transition-all text-sm font-medium text-foreground"
-            >
-              <span>{p.emoji}</span> {p.name}
-            </button>
+        <div className="w-full max-w-xl space-y-4">
+          {regions.map(region => (
+            <div key={region.label}>
+              <p className="text-xs font-semibold text-muted-foreground mb-2 flex items-center gap-1.5">
+                <span>{region.emoji}</span> {region.label}
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {region.places.map(p => (
+                  <button
+                    key={p.name}
+                    onClick={() => setDestination(p.name)}
+                    className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-border bg-card hover:border-chip-orange/40 hover:shadow-warm transition-all text-sm font-medium text-foreground"
+                  >
+                    <span>{p.emoji}</span> {p.name}
+                  </button>
+                ))}
+              </div>
+            </div>
           ))}
         </div>
       )}
