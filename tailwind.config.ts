@@ -58,6 +58,10 @@ export default {
           cream: "hsl(var(--chip-cream))",
           warm: "hsl(var(--chip-warm))",
         },
+        "on-image": {
+          text: "hsl(var(--on-image-text))",
+          "text-muted": "hsl(var(--on-image-text-muted))",
+        },
         sidebar: {
           DEFAULT: "hsl(var(--sidebar-background))",
           foreground: "hsl(var(--sidebar-foreground))",

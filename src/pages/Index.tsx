@@ -182,14 +182,14 @@ const Index = () => {
                 <Link to="/planning" className="group block">
                   <div className="relative rounded-2xl overflow-hidden shadow-card hover:shadow-warm transition-all duration-300 hover:-translate-y-1">
                     <img src={dest.image} alt={dest.name} className="w-full h-52 object-cover group-hover:scale-105 transition-transform duration-500" />
-                    <div className="absolute inset-0 bg-gradient-to-t from-foreground/60 via-transparent to-transparent" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
                     <div className="absolute bottom-0 left-0 right-0 p-4">
                       <div className="flex items-center gap-1.5 mb-1">
                         <span className="text-lg">{dest.emoji}</span>
-                        <h3 className="font-display font-bold text-background text-lg">{dest.name}</h3>
+                        <h3 className="font-display font-bold text-on-image-text text-lg">{dest.name}</h3>
                       </div>
-                      <p className="text-background/80 text-sm">{dest.desc}</p>
-                      <div className="flex items-center gap-3 mt-2 text-xs text-background/70">
+                      <p className="text-on-image-text-muted/80 text-sm">{dest.desc}</p>
+                      <div className="flex items-center gap-3 mt-2 text-xs text-on-image-text-muted/70">
                         <span>{dest.days}</span>
                         <span>•</span>
                         <span className="font-semibold text-chip-yellow">{dest.price} VNĐ</span>
