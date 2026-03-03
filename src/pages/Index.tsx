@@ -92,7 +92,7 @@ const Index = () => {
                 alt="Du lịch Việt Nam - Vịnh Hạ Long"
                 className="w-full h-[500px] object-cover"
               />
-              <div className="absolute inset-0 bg-gradient-to-t from-foreground/30 to-transparent" />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/30 to-transparent" />
 
               <motion.div
                 animate={{ y: [0, -8, 0] }}
