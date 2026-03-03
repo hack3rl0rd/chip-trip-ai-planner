@@ -105,22 +105,47 @@ function formatDate(dateStr: string, dayOffset: number): string {
 const budgetLabels = ["< 1M", "1-3M", "3-5M", "5-10M", "10M+"];
 const budgetEstimates = ["~800K", "~2M", "~4M", "~7.5M", "~12M"];
 
+function createGenericItinerary(dest: string): TripDay[] {
+  return [
+    {
+      day: "Ngày 1", date: "",
+      items: [
+        { id: "g1", time: "08:00", title: `Check-in khách sạn ${dest}`, desc: "Nghỉ ngơi, chuẩn bị hành trình", cost: "600K", image: tripSapa, address: dest, rating: 4.5, tips: "Nên đặt phòng trước để có giá tốt" },
+        { id: "g2", time: "10:30", title: `Khám phá trung tâm ${dest}`, desc: "Tham quan các điểm nổi bật", cost: "200K", image: tripDanang, address: `Trung tâm ${dest}`, rating: 4.6, tips: "Hỏi người địa phương để biết chỗ hay" },
+        { id: "g3", time: "12:30", title: `Thưởng thức đặc sản ${dest}`, desc: "Ăn trưa món địa phương", cost: "150K", image: tripHoian, address: dest, rating: 4.4, tips: "Tìm quán đông người địa phương ăn" },
+        { id: "g4", time: "15:00", title: `Cafe view đẹp tại ${dest}`, desc: "Nghỉ ngơi, check-in sống ảo", cost: "80K", image: tripPhuquoc, address: dest, rating: 4.3, tips: "Xem review trên Google Maps trước" },
+      ],
+    },
+    {
+      day: "Ngày 2", date: "",
+      items: [
+        { id: "g5", time: "07:00", title: `Ngắm bình minh tại ${dest}`, desc: "Khám phá vẻ đẹp buổi sáng", cost: "Miễn phí", image: tripSapa, address: dest, rating: 4.8, tips: "Dậy sớm để có ảnh đẹp" },
+        { id: "g6", time: "09:30", title: `Tham quan danh lam ${dest}`, desc: "Điểm du lịch nổi tiếng", cost: "150K", image: tripDanang, address: dest, rating: 4.7, tips: "Mang theo nước uống và kem chống nắng" },
+        { id: "g7", time: "12:00", title: `Ăn trưa đặc sản vùng miền`, desc: "Trải nghiệm ẩm thực", cost: "200K", image: tripHoian, address: dest, rating: 4.5, tips: "Thử các món đặc trưng vùng miền" },
+        { id: "g8", time: "19:00", title: `Khám phá ${dest} về đêm`, desc: "Chợ đêm, phố đi bộ", cost: "100K", image: tripPhuquoc, address: dest, rating: 4.6, tips: "Đi bộ để cảm nhận không khí" },
+      ],
+    },
+    {
+      day: "Ngày 3", date: "",
+      items: [
+        { id: "g9", time: "08:00", title: `Địa điểm tâm linh ${dest}`, desc: "Tham quan chùa, đền", cost: "Miễn phí", image: tripSapa, address: dest, rating: 4.7, tips: "Mặc trang phục kín đáo" },
+        { id: "g10", time: "11:00", title: `Mua sắm quà lưu niệm`, desc: "Chợ địa phương, đặc sản", cost: "300K", image: tripHoian, address: dest, rating: 4.3, tips: "Nhớ trả giá khi mua ở chợ" },
+        { id: "g11", time: "14:00", title: `Check-out và trả phòng`, desc: "Kết thúc chuyến đi", cost: "Miễn phí", image: tripDanang, address: dest, rating: 4.5, tips: "Kiểm tra đồ đạc trước khi rời đi" },
+      ],
+    },
+  ];
+}
+
 export function generateTrip(destination: string, startDate: string, endDate: string, budget: number, styles: string[]): TripPlan {
   const key = destination.toLowerCase().trim();
   const matched = Object.keys(destinations).find(k => key.includes(k));
   
-  // Use matched itinerary or generate a generic one based on destination name
-  const baseItinerary = matched ? destinations[matched] : destinations["đà nẵng"];
   const displayDest = destination || "Đà Nẵng";
+  const baseItinerary = matched ? destinations[matched] : createGenericItinerary(displayDest);
   
   const days = baseItinerary.map((day, i) => ({
     ...day,
     date: startDate ? formatDate(startDate, i) : day.date,
-    // If no match, update item titles/desc to mention the actual destination
-    items: !matched ? day.items.map(item => ({
-      ...item,
-      id: `gen_${i}_${item.id}`,
-    })) : day.items,
   }));
 
   const start = startDate ? new Date(startDate) : null;
