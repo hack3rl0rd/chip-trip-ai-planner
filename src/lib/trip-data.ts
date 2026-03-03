@@ -102,12 +102,25 @@ function formatDate(dateStr: string, dayOffset: number): string {
   return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
 }
 
+const budgetLabels = ["< 1M", "1-3M", "3-5M", "5-10M", "10M+"];
+const budgetEstimates = ["~800K", "~2M", "~4M", "~7.5M", "~12M"];
+
 export function generateTrip(destination: string, startDate: string, endDate: string, budget: number, styles: string[]): TripPlan {
   const key = destination.toLowerCase().trim();
   const matched = Object.keys(destinations).find(k => key.includes(k));
-  const days = (matched ? destinations[matched] : defaultItinerary).map((day, i) => ({
+  
+  // Use matched itinerary or generate a generic one based on destination name
+  const baseItinerary = matched ? destinations[matched] : destinations["đà nẵng"];
+  const displayDest = destination || "Đà Nẵng";
+  
+  const days = baseItinerary.map((day, i) => ({
     ...day,
     date: startDate ? formatDate(startDate, i) : day.date,
+    // If no match, update item titles/desc to mention the actual destination
+    items: !matched ? day.items.map(item => ({
+      ...item,
+      id: `gen_${i}_${item.id}`,
+    })) : day.items,
   }));
 
   const start = startDate ? new Date(startDate) : null;
@@ -119,18 +132,19 @@ export function generateTrip(destination: string, startDate: string, endDate: st
     ? `${formatDate(startDate, 0)} - ${formatDate(endDate, 0)}`
     : "15/03 - 17/03/2026";
 
-  const displayDest = destination || "Đà Nẵng";
   const title = `${displayDest} ${numDays}N${numNights}Đ`;
 
   const tagMap: Record<string, string> = { healing: "Chữa lành", food: "Ẩm thực", photo: "Sống ảo", adventure: "Mạo hiểm" };
   const tags = styles.map(s => tagMap[s] || s);
+
+  const totalCost = budgetEstimates[budget] || "~3M";
 
   return {
     id: Date.now().toString(),
     destination: displayDest,
     title,
     days: days.slice(0, numDays),
-    totalCost: "~3.06M",
+    totalCost,
     rating: 4.8,
     duration: `${numDays} ngày ${numNights} đêm`,
     image: days[0]?.items[0]?.image || tripDanang,
