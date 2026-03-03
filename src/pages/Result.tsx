@@ -1,7 +1,7 @@
 import { useLocation, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
-import { MapPin, Clock, Wallet, Star, Bookmark, Share2, Crown, Check, Download, ExternalLink, Hotel, UtensilsCrossed, Ticket, Coffee } from "lucide-react";
+import { MapPin, Clock, Wallet, Star, Bookmark, Share2, Crown, Check, Download, ExternalLink, Hotel, UtensilsCrossed, Ticket, Coffee, Copy, Trash2, Plus, GripVertical } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import Navbar from "@/components/Navbar";
@@ -29,8 +29,10 @@ const Result = () => {
   const navigate = useNavigate();
   const { state } = useLocation();
   const [saved, setSaved] = useState(false);
+  const [editMode, setEditMode] = useState(false);
 
-  const trip: TripPlan = state?.trip || generateTrip("Đà Nẵng", "2026-03-15", "2026-03-17", 3, []);
+  const initialTrip: TripPlan = state?.trip || generateTrip("Đà Nẵng", "2026-03-15", "2026-03-17", 3, []);
+  const [trip, setTrip] = useState<TripPlan>(initialTrip);
 
   const packingItems = generatePackingList(
     trip.destination,
@@ -80,6 +82,37 @@ const Result = () => {
       const searchQuery = encodeURIComponent(item.title + " " + (item.address || trip.destination));
       window.open(`https://www.google.com/search?q=${searchQuery}`, "_blank");
     }
+  };
+
+  const handleClone = () => {
+    const cloned: TripPlan = { ...trip, id: Date.now().toString(), title: trip.title + " (bản sao)" };
+    saveTrip(cloned);
+    toast.success("Đã clone lịch trình!", {
+      description: "Bản sao đã được lưu vào \"Chuyến đi của tôi\"",
+      action: { label: "Xem ngay", onClick: () => navigate("/saved") },
+    });
+  };
+
+  const handleDeleteItem = (dayIdx: number, itemIdx: number) => {
+    setTrip(prev => ({
+      ...prev,
+      days: prev.days.map((day, di) =>
+        di === dayIdx ? { ...day, items: day.items.filter((_, ii) => ii !== itemIdx) } : day
+      ),
+    }));
+    toast.success("Đã xóa hoạt động");
+  };
+
+  const handleMoveItem = (dayIdx: number, itemIdx: number, direction: "up" | "down") => {
+    setTrip(prev => {
+      const newDays = [...prev.days];
+      const items = [...newDays[dayIdx].items];
+      const targetIdx = direction === "up" ? itemIdx - 1 : itemIdx + 1;
+      if (targetIdx < 0 || targetIdx >= items.length) return prev;
+      [items[itemIdx], items[targetIdx]] = [items[targetIdx], items[itemIdx]];
+      newDays[dayIdx] = { ...newDays[dayIdx], items };
+      return { ...prev, days: newDays };
+    });
   };
 
   // Calculate detailed costs
@@ -169,11 +202,20 @@ const Result = () => {
                       <span className="flex items-center gap-1"><Star className="w-4 h-4 text-chip-yellow" /> {trip.rating}</span>
                     </div>
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex gap-2 flex-wrap">
                     <Button variant="soft" size="sm" onClick={handleShare}><Share2 className="w-4 h-4" /></Button>
                     <ExportDialog trip={trip}>
                       <Button variant="soft" size="sm"><Download className="w-4 h-4" /></Button>
                     </ExportDialog>
+                    <Button variant="soft" size="sm" onClick={handleClone}><Copy className="w-4 h-4" /> Clone</Button>
+                    <Button
+                      variant={editMode ? "hero" : "soft"}
+                      size="sm"
+                      onClick={() => setEditMode(!editMode)}
+                    >
+                      {editMode ? <Check className="w-4 h-4" /> : <GripVertical className="w-4 h-4" />}
+                      {editMode ? "Xong" : "Sửa"}
+                    </Button>
                     <Button
                       variant={saved ? "soft" : "hero"}
                       size="sm"
@@ -181,7 +223,7 @@ const Result = () => {
                       disabled={saved}
                     >
                       {saved ? <Check className="w-4 h-4" /> : <Bookmark className="w-4 h-4" />}
-                      {saved ? "Đã lưu" : "Lưu kế hoạch"}
+                      {saved ? "Đã lưu" : "Lưu"}
                     </Button>
                   </div>
                 </div>
@@ -211,10 +253,27 @@ const Result = () => {
                       return (
                         <div
                           key={idx}
-                          onClick={() => handleItemClick(item)}
-                          className="relative flex gap-4 bg-card rounded-xl p-4 border border-border shadow-card hover:shadow-warm transition-all ml-4 cursor-pointer hover:-translate-y-0.5 group"
+                          onClick={() => !editMode && handleItemClick(item)}
+                          className={`relative flex gap-4 bg-card rounded-xl p-4 border border-border shadow-card hover:shadow-warm transition-all ml-4 ${editMode ? "" : "cursor-pointer hover:-translate-y-0.5"} group`}
                         >
                           <div className="absolute -left-[1.6rem] top-5 w-3 h-3 rounded-full bg-chip-orange border-2 border-background" />
+
+                          {/* Edit controls */}
+                          {editMode && (
+                            <div className="flex flex-col gap-1 flex-shrink-0">
+                              <button
+                                onClick={(e) => { e.stopPropagation(); handleMoveItem(dayIdx, idx, "up"); }}
+                                disabled={idx === 0}
+                                className="w-7 h-7 rounded-lg flex items-center justify-center bg-muted hover:bg-chip-orange/10 text-muted-foreground hover:text-chip-orange disabled:opacity-30 transition-all text-xs"
+                              >▲</button>
+                              <button
+                                onClick={(e) => { e.stopPropagation(); handleMoveItem(dayIdx, idx, "down"); }}
+                                disabled={idx === day.items.length - 1}
+                                className="w-7 h-7 rounded-lg flex items-center justify-center bg-muted hover:bg-chip-orange/10 text-muted-foreground hover:text-chip-orange disabled:opacity-30 transition-all text-xs"
+                              >▼</button>
+                            </div>
+                          )}
+
                           <img src={item.image} alt={item.title} className="w-16 h-16 rounded-xl object-cover flex-shrink-0" />
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2">
@@ -223,17 +282,27 @@ const Result = () => {
                             <h4 className="font-semibold text-foreground truncate">{item.title}</h4>
                             <p className="text-sm text-muted-foreground">{item.desc}</p>
                             {/* Affiliate CTA */}
-                            <button
-                              onClick={(e) => handleBooking(e, item)}
-                              className="mt-2 inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-chip-yellow-light hover:bg-chip-orange/10 border border-chip-yellow/30 text-xs font-semibold text-chip-orange transition-all hover:shadow-warm"
-                            >
-                              <BookingIcon className="w-3 h-3" />
-                              {bookingLabel}
-                              <ExternalLink className="w-3 h-3" />
-                            </button>
+                            {!editMode && (
+                              <button
+                                onClick={(e) => handleBooking(e, item)}
+                                className="mt-2 inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-chip-yellow-light hover:bg-chip-orange/10 border border-chip-yellow/30 text-xs font-semibold text-chip-orange transition-all hover:shadow-warm"
+                              >
+                                <BookingIcon className="w-3 h-3" />
+                                {bookingLabel}
+                                <ExternalLink className="w-3 h-3" />
+                              </button>
+                            )}
                           </div>
-                          <div className="text-right flex-shrink-0">
+                          <div className="text-right flex-shrink-0 flex flex-col items-end gap-2">
                             <span className="text-sm font-bold text-foreground">{item.cost}</span>
+                            {editMode && (
+                              <button
+                                onClick={(e) => { e.stopPropagation(); handleDeleteItem(dayIdx, idx); }}
+                                className="w-7 h-7 rounded-lg flex items-center justify-center bg-destructive/10 hover:bg-destructive/20 text-destructive transition-all"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            )}
                           </div>
                         </div>
                       );

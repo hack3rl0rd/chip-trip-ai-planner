@@ -101,6 +101,120 @@ const destinations: Record<string, TripDay[]> = {
       ],
     },
   ],
+  "hà nội": [
+    {
+      day: "Ngày 1", date: "",
+      items: [
+        { id: "hn1", time: "08:00", title: "Check-in khách sạn phố cổ", desc: "Trải nghiệm 36 phố phường", cost: "700K", image: tripDanang, address: "Phố cổ Hà Nội", rating: 4.6, tips: "Nên chọn khách sạn khu Hoàn Kiếm để tiện đi lại", bookingUrl: "https://www.traveloka.com/vi-vn/hotel/vietnam/area/ha-noi-10180", bookingType: "hotel" },
+        { id: "hn2", time: "10:00", title: "Tham quan Văn Miếu - Quốc Tử Giám", desc: "Trường đại học đầu tiên của VN", cost: "30K", image: tripHoian, address: "58 Quốc Tử Giám, Đống Đa, Hà Nội", rating: 4.8, tips: "Nên đi sáng sớm để tránh nắng và đông người", bookingType: "attraction" },
+        { id: "hn3", time: "12:00", title: "Ăn phở Bát Đàn", desc: "Phở huyền thoại Hà Nội", cost: "60K", image: tripHoian, address: "49 Bát Đàn, Hoàn Kiếm, Hà Nội", rating: 4.7, tips: "Xếp hàng từ 6h sáng, quán hết rất nhanh", bookingType: "restaurant" },
+        { id: "hn4", time: "14:00", title: "Hồ Hoàn Kiếm & Đền Ngọc Sơn", desc: "Biểu tượng Thủ đô", cost: "30K", image: tripDanang, address: "Hồ Hoàn Kiếm, Hà Nội", rating: 4.9, tips: "Chiều tối đi bộ quanh hồ rất đẹp", bookingType: "attraction" },
+        { id: "hn5", time: "16:00", title: "Cafe trứng Giảng", desc: "Thức uống đặc trưng Hà Nội", cost: "45K", image: tripSapa, address: "39 Nguyễn Hữu Huân, Hoàn Kiếm", rating: 4.6, tips: "Gọi cafe trứng nóng, ngồi tầng 2 view phố cổ", bookingType: "cafe" },
+      ],
+    },
+    {
+      day: "Ngày 2", date: "",
+      items: [
+        { id: "hn6", time: "07:00", title: "Lăng Bác & Quảng trường Ba Đình", desc: "Viếng lăng Chủ tịch Hồ Chí Minh", cost: "Miễn phí", image: tripDanang, address: "Quảng trường Ba Đình, Hà Nội", rating: 4.9, tips: "Mở cửa Thứ 3-5, Sáng. Mặc lịch sự, không đội mũ", bookingType: "attraction" },
+        { id: "hn7", time: "10:00", title: "Bảo tàng Dân tộc học", desc: "Văn hóa 54 dân tộc Việt Nam", cost: "40K", image: tripHoian, address: "Nguyễn Văn Huyên, Cầu Giấy", rating: 4.7, tips: "Cần ít nhất 2 tiếng để tham quan hết", bookingType: "attraction" },
+        { id: "hn8", time: "12:30", title: "Bún chả Hương Liên", desc: "Bún chả Obama nổi tiếng", cost: "80K", image: tripHoian, address: "24 Lê Văn Hưu, Hai Bà Trưng", rating: 4.5, tips: "Gọi combo bún chả + nem cua bể", bookingType: "restaurant" },
+        { id: "hn9", time: "15:00", title: "Phố đi bộ Hồ Gươm", desc: "Chụp ảnh, hoạt động đường phố", cost: "Miễn phí", image: tripDanang, address: "Phố đi bộ Hồ Gươm", rating: 4.8, tips: "Mở cửa T6 tối đến CN tối, rất vui nhộn", bookingType: "attraction" },
+        { id: "hn10", time: "19:00", title: "Xem múa rối nước Thăng Long", desc: "Nghệ thuật truyền thống VN", cost: "150K", image: tripHoian, address: "57B Đinh Tiên Hoàng, Hoàn Kiếm", rating: 4.6, tips: "Đặt vé trước, show 17h hoặc 20h", bookingUrl: "https://www.klook.com/vi/activity/1641-thang-long-water-puppet-theater-hanoi/", bookingType: "attraction" },
+      ],
+    },
+    {
+      day: "Ngày 3", date: "",
+      items: [
+        { id: "hn11", time: "08:00", title: "Chùa Trấn Quốc", desc: "Ngôi chùa cổ nhất Hà Nội", cost: "Miễn phí", image: tripSapa, address: "Thanh Niên, Tây Hồ, Hà Nội", rating: 4.8, tips: "Đi sáng sớm, view Hồ Tây rất đẹp", bookingType: "attraction" },
+        { id: "hn12", time: "10:30", title: "Bia hơi Tạ Hiện", desc: "Trải nghiệm bia hơi vỉa hè", cost: "100K", image: tripDanang, address: "Tạ Hiện, Hoàn Kiếm", rating: 4.4, tips: "Đi buổi tối không khí sôi động hơn", bookingType: "restaurant" },
+        { id: "hn13", time: "13:00", title: "Mua sắm chợ Đồng Xuân", desc: "Chợ lớn nhất Hà Nội", cost: "500K", image: tripHoian, address: "Chợ Đồng Xuân, Hoàn Kiếm", rating: 4.3, tips: "Trả giá khoảng 50-60% giá niêm yết", bookingType: "attraction" },
+      ],
+    },
+  ],
+  "phú quốc": [
+    {
+      day: "Ngày 1", date: "",
+      items: [
+        { id: "pq1", time: "09:00", title: "Check-in resort Phú Quốc", desc: "Nghỉ dưỡng bãi biển", cost: "1.2M", image: tripPhuquoc, address: "Bãi Dài, Phú Quốc", rating: 4.7, tips: "Resort Bãi Dài view đẹp và yên tĩnh nhất", bookingUrl: "https://www.traveloka.com/vi-vn/hotel/vietnam/area/phu-quoc-10198", bookingType: "hotel" },
+        { id: "pq2", time: "11:00", title: "Bãi Sao Phú Quốc", desc: "Bãi biển đẹp nhất đảo ngọc", cost: "Miễn phí", image: tripPhuquoc, address: "Bãi Sao, An Thới, Phú Quốc", rating: 4.9, tips: "Nên đi buổi sáng, nước trong xanh nhất", bookingType: "attraction" },
+        { id: "pq3", time: "12:30", title: "Hải sản tươi sống Phú Quốc", desc: "Ghẹ, tôm hùm, cá mú", cost: "500K", image: tripHoian, address: "Chợ đêm Phú Quốc", rating: 4.6, tips: "Thử nhum biển nướng và gỏi cá trích", bookingType: "restaurant" },
+        { id: "pq4", time: "16:00", title: "Ngắm hoàng hôn Dinh Cậu", desc: "Sunset đẹp nhất Phú Quốc", cost: "Miễn phí", image: tripPhuquoc, address: "Dinh Cậu, Dương Đông", rating: 4.8, tips: "Đến trước 17h để chọn vị trí đẹp", bookingType: "attraction" },
+      ],
+    },
+    {
+      day: "Ngày 2", date: "",
+      items: [
+        { id: "pq5", time: "08:00", title: "Cáp treo Hòn Thơm", desc: "Cáp treo vượt biển dài nhất TG", cost: "350K", image: tripPhuquoc, address: "An Thới, Phú Quốc", rating: 4.8, tips: "Đi sáng sớm để tránh xếp hàng", bookingUrl: "https://www.klook.com/vi/activity/18772-hon-thom-cable-car-phu-quoc/", bookingType: "attraction" },
+        { id: "pq6", time: "11:00", title: "VinWonders Phú Quốc", desc: "Công viên giải trí hàng đầu", cost: "600K", image: tripDanang, address: "VinWonders, Phú Quốc", rating: 4.5, tips: "Mua combo cáp treo + VinWonders tiết kiệm hơn", bookingUrl: "https://www.klook.com/vi/activity/18370-vinwonders-phu-quoc/", bookingType: "attraction" },
+        { id: "pq7", time: "14:00", title: "Làng chài Hàm Ninh", desc: "Ăn ghẹ hấp, ngắm biển", cost: "300K", image: tripHoian, address: "Hàm Ninh, Phú Quốc", rating: 4.6, tips: "Ghẹ Hàm Ninh chấm muối tiêu chanh là nhất", bookingType: "restaurant" },
+        { id: "pq8", time: "19:00", title: "Chợ đêm Phú Quốc", desc: "Hải sản nướng & mua sắm", cost: "200K", image: tripPhuquoc, address: "Chợ đêm Phú Quốc, Dương Đông", rating: 4.5, tips: "Nên ăn ở các quán phía trong, giá mềm hơn", bookingType: "restaurant" },
+      ],
+    },
+    {
+      day: "Ngày 3", date: "",
+      items: [
+        { id: "pq9", time: "07:00", title: "Lặn ngắm san hô", desc: "Tour snorkeling 4 đảo", cost: "450K", image: tripPhuquoc, address: "An Thới, Phú Quốc", rating: 4.7, tips: "Mang theo thuốc chống say sóng", bookingUrl: "https://www.klook.com/vi/activity/19025-snorkeling-phu-quoc/", bookingType: "attraction" },
+        { id: "pq10", time: "12:00", title: "Nhà thùng nước mắm", desc: "Tìm hiểu quy trình làm nước mắm", cost: "Miễn phí", image: tripHoian, address: "Dương Đông, Phú Quốc", rating: 4.3, tips: "Mua nước mắm Phú Quốc làm quà rất ý nghĩa", bookingType: "attraction" },
+        { id: "pq11", time: "15:00", title: "Safari Phú Quốc", desc: "Vườn thú bán hoang dã", cost: "650K", image: tripSapa, address: "Vinpearl Safari, Phú Quốc", rating: 4.6, tips: "Mua vé online rẻ hơn tại quầy", bookingUrl: "https://www.klook.com/vi/activity/18369-vinpearl-safari-phu-quoc/", bookingType: "attraction" },
+      ],
+    },
+  ],
+  "nha trang": [
+    {
+      day: "Ngày 1", date: "",
+      items: [
+        { id: "nt1", time: "08:00", title: "Check-in khách sạn Trần Phú", desc: "View biển Nha Trang", cost: "800K", image: tripDanang, address: "Trần Phú, Nha Trang", rating: 4.5, tips: "Chọn phòng tầng cao để có view biển đẹp", bookingUrl: "https://www.traveloka.com/vi-vn/hotel/vietnam/area/nha-trang-10190", bookingType: "hotel" },
+        { id: "nt2", time: "10:00", title: "Tháp Bà Ponagar", desc: "Di tích Chăm Pa 1000 năm tuổi", cost: "22K", image: tripHoian, address: "Tháp Bà Ponagar, Nha Trang", rating: 4.6, tips: "Mặc đồ kín đáo, có cho mượn áo choàng", bookingType: "attraction" },
+        { id: "nt3", time: "12:00", title: "Bún cá sứa Nha Trang", desc: "Đặc sản chỉ có ở Nha Trang", cost: "50K", image: tripHoian, address: "Chợ Đầm, Nha Trang", rating: 4.5, tips: "Quán bên hông chợ Đầm là ngon nhất", bookingType: "restaurant" },
+        { id: "nt4", time: "15:00", title: "Tắm biển Trần Phú", desc: "Bãi biển trung tâm thành phố", cost: "Miễn phí", image: tripPhuquoc, address: "Bãi biển Trần Phú, Nha Trang", rating: 4.7, tips: "Tắm buổi chiều mát mẻ, sóng nhẹ", bookingType: "attraction" },
+      ],
+    },
+    {
+      day: "Ngày 2", date: "",
+      items: [
+        { id: "nt5", time: "08:00", title: "Tour 4 đảo Nha Trang", desc: "Hòn Mun, Hòn Một, Hòn Tằm", cost: "350K", image: tripPhuquoc, address: "Cảng Nha Trang", rating: 4.6, tips: "Chọn tour có snorkeling ở Hòn Mun", bookingUrl: "https://www.klook.com/vi/activity/1868-four-islands-tour-nha-trang/", bookingType: "attraction" },
+        { id: "nt6", time: "12:30", title: "Nem nướng Ninh Hòa", desc: "Ăn trưa đặc sản nổi tiếng", cost: "80K", image: tripHoian, address: "16A Lãn Ông, Nha Trang", rating: 4.7, tips: "Quán Đặng Văn Quyên là nổi tiếng nhất", bookingType: "restaurant" },
+        { id: "nt7", time: "15:00", title: "VinWonders Nha Trang", desc: "Công viên giải trí trên đảo", cost: "700K", image: tripDanang, address: "Hòn Tre, Nha Trang", rating: 4.5, tips: "Đi cáp treo qua biển rất đẹp", bookingUrl: "https://www.klook.com/vi/activity/5543-vinwonders-nha-trang/", bookingType: "attraction" },
+        { id: "nt8", time: "20:00", title: "Bia craft Louisiane", desc: "Bar rooftop view biển đêm", cost: "150K", image: tripDanang, address: "Louisiane Brewhouse, Nha Trang", rating: 4.4, tips: "Happy hour 17h-19h, bia rẻ hơn 30%", bookingType: "cafe" },
+      ],
+    },
+    {
+      day: "Ngày 3", date: "",
+      items: [
+        { id: "nt9", time: "08:00", title: "Tắm bùn khoáng I-Resort", desc: "Thư giãn, chữa lành", cost: "250K", image: tripSapa, address: "I-Resort, Nha Trang", rating: 4.7, tips: "Đặt combo tắm bùn + onsen tiết kiệm hơn", bookingUrl: "https://www.klook.com/vi/activity/5541-i-resort-mud-bath-nha-trang/", bookingType: "attraction" },
+        { id: "nt10", time: "11:00", title: "Chợ Đầm Nha Trang", desc: "Mua hải sản khô, yến sào", cost: "400K", image: tripHoian, address: "Chợ Đầm, Nha Trang", rating: 4.3, tips: "Trả giá mạnh tay, đặc biệt yến sào", bookingType: "attraction" },
+        { id: "nt11", time: "14:00", title: "Cafe muối Nha Trang", desc: "Thức uống viral TikTok", cost: "40K", image: tripSapa, address: "Trần Quang Khải, Nha Trang", rating: 4.5, tips: "Cafe muối ở Nha Trang mới là gốc!", bookingType: "cafe" },
+      ],
+    },
+  ],
+  "sapa": [
+    {
+      day: "Ngày 1", date: "",
+      items: [
+        { id: "sp1", time: "08:00", title: "Check-in homestay bản Cát Cát", desc: "View ruộng bậc thang", cost: "500K", image: tripSapa, address: "Bản Cát Cát, Sa Pa", rating: 4.7, tips: "Homestay người H'Mông authentic nhất", bookingUrl: "https://www.traveloka.com/vi-vn/hotel/vietnam/area/sapa-10201", bookingType: "hotel" },
+        { id: "sp2", time: "10:00", title: "Trekking bản Cát Cát", desc: "Khám phá văn hóa H'Mông", cost: "70K", image: tripSapa, address: "Bản Cát Cát, Sa Pa", rating: 4.8, tips: "Mang giày trekking, đường trơn khi mưa", bookingType: "attraction" },
+        { id: "sp3", time: "12:30", title: "Ăn trưa thắng cố", desc: "Món ăn truyền thống vùng cao", cost: "80K", image: tripHoian, address: "Chợ Sa Pa", rating: 4.4, tips: "Thắng cố ngựa là đặc sản, ăn kèm bánh ngô", bookingType: "restaurant" },
+        { id: "sp4", time: "15:00", title: "Nhà thờ đá Sapa", desc: "Biểu tượng thị trấn trong sương", cost: "Miễn phí", image: tripSapa, address: "Nhà thờ đá, Sa Pa", rating: 4.6, tips: "Chụp ảnh lúc sương mù rất cổ tích", bookingType: "attraction" },
+      ],
+    },
+    {
+      day: "Ngày 2", date: "",
+      items: [
+        { id: "sp5", time: "05:30", title: "Săn mây đỉnh Fansipan", desc: "Nóc nhà Đông Dương", cost: "800K", image: tripSapa, address: "Fansipan, Sa Pa", rating: 4.9, tips: "Đi cáp treo lên 20 phút, leo thêm 600 bậc", bookingUrl: "https://www.klook.com/vi/activity/12284-fansipan-cable-car-sapa/", bookingType: "attraction" },
+        { id: "sp6", time: "11:00", title: "Ruộng bậc thang Mường Hoa", desc: "Cảnh sắc tuyệt đẹp", cost: "Miễn phí", image: tripSapa, address: "Thung lũng Mường Hoa, Sa Pa", rating: 4.9, tips: "Mùa lúa chín (tháng 9-10) đẹp nhất", bookingType: "attraction" },
+        { id: "sp7", time: "13:00", title: "Cơm lam & gà nướng", desc: "Ẩm thực dân tộc", cost: "150K", image: tripHoian, address: "Bản Tả Van, Sa Pa", rating: 4.6, tips: "Gà đen nướng mắc khén là must-try", bookingType: "restaurant" },
+        { id: "sp8", time: "19:00", title: "Chợ đêm Sa Pa", desc: "Đồ thổ cẩm & ăn vặt", cost: "100K", image: tripSapa, address: "Chợ đêm Sa Pa", rating: 4.5, tips: "Mua khăn thổ cẩm dệt tay rất đẹp", bookingType: "attraction" },
+      ],
+    },
+    {
+      day: "Ngày 3", date: "",
+      items: [
+        { id: "sp9", time: "07:00", title: "Bản Tả Phìn", desc: "Trải nghiệm tắm lá thuốc Dao", cost: "100K", image: tripSapa, address: "Bản Tả Phìn, Sa Pa", rating: 4.7, tips: "Tắm lá thuốc người Dao rất thư giãn", bookingType: "attraction" },
+        { id: "sp10", time: "10:00", title: "Thác Bạc", desc: "Thác nước hùng vĩ", cost: "20K", image: tripSapa, address: "Thác Bạc, Sa Pa", rating: 4.4, tips: "Đường đi trơn, cẩn thận khi leo", bookingType: "attraction" },
+        { id: "sp11", time: "12:00", title: "Cá hồi Sapa", desc: "Lẩu cá hồi tươi sống", cost: "350K", image: tripHoian, address: "Cầu Mây, Sa Pa", rating: 4.8, tips: "Ăn sashimi cá hồi Sa Pa tươi cực kỳ", bookingType: "restaurant" },
+      ],
+    },
+  ],
 };
 
 const defaultItinerary = destinations["đà nẵng"];
