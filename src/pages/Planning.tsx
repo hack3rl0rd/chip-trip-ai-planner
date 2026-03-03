@@ -47,14 +47,46 @@ const Planning = () => {
     return true;
   };
 
-  const quickPicks = [
-    { name: "Đà Nẵng", emoji: "🏖️" },
-    { name: "Đà Lạt", emoji: "🌸" },
-    { name: "Hà Nội", emoji: "🏛️" },
-    { name: "Phú Quốc", emoji: "🌴" },
-    { name: "Nha Trang", emoji: "🐚" },
-    { name: "Sapa", emoji: "🏔️" },
+  const regions = [
+    {
+      label: "Miền Bắc",
+      emoji: "🏛️",
+      places: [
+        { name: "Hà Nội", emoji: "🏛️" },
+        { name: "Sapa", emoji: "🏔️" },
+        { name: "Hạ Long", emoji: "🛶" },
+        { name: "Ninh Bình", emoji: "⛰️" },
+        { name: "Hà Giang", emoji: "🌄" },
+        { name: "Mai Châu", emoji: "🌾" },
+      ],
+    },
+    {
+      label: "Miền Trung",
+      emoji: "🏖️",
+      places: [
+        { name: "Đà Nẵng", emoji: "🏖️" },
+        { name: "Hội An", emoji: "🏮" },
+        { name: "Huế", emoji: "👑" },
+        { name: "Nha Trang", emoji: "🐚" },
+        { name: "Quy Nhơn", emoji: "🌊" },
+        { name: "Phong Nha", emoji: "🦇" },
+      ],
+    },
+    {
+      label: "Miền Nam",
+      emoji: "🌴",
+      places: [
+        { name: "Phú Quốc", emoji: "🌴" },
+        { name: "Đà Lạt", emoji: "🌸" },
+        { name: "TP.HCM", emoji: "🏙️" },
+        { name: "Vũng Tàu", emoji: "⛱️" },
+        { name: "Cần Thơ", emoji: "🚣" },
+        { name: "Côn Đảo", emoji: "🐢" },
+      ],
+    },
   ];
+
+  const allPlaces = regions.flatMap(r => r.places);
 
   const filteredSuggestions = destination.length > 0
     ? quickPicks.filter(p => p.name.toLowerCase().includes(destination.toLowerCase()) && p.name.toLowerCase() !== destination.toLowerCase())
