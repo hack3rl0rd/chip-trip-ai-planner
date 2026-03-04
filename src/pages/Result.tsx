@@ -293,8 +293,8 @@ const Result = () => {
                     <Button variant="soft" size="sm" onClick={handleShare}><Share2 className="w-4 h-4" /></Button>
                     <ExportDialog trip={trip}><Button variant="soft" size="sm"><Download className="w-4 h-4" /></Button></ExportDialog>
                     <Button variant="soft" size="sm" onClick={handleClone}><Copy className="w-4 h-4" /> Clone</Button>
-                    <GroupPanel tripId={trip.id} isOwner={true} />
-                    <SplitBill tripId={trip.id} memberNames={user ? { [user.id]: profile?.display_name || user.email?.split("@")[0] || "Bạn" } : {}} />
+                    {dbTripId && <GroupPanel tripId={dbTripId} isOwner={true} />}
+                    {dbTripId && <SplitBill tripId={dbTripId} memberNames={user ? { [user.id]: profile?.display_name || user.email?.split("@")[0] || "Bạn" } : {}} />}
                     <Button variant={editMode ? "hero" : "soft"} size="sm" onClick={() => setEditMode(!editMode)}>
                       {editMode ? <Check className="w-4 h-4" /> : <GripVertical className="w-4 h-4" />}
                       {editMode ? "Xong" : "Sửa"}
