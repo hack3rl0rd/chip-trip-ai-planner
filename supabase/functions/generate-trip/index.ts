@@ -68,11 +68,15 @@ Trả về JSON đúng format sau (KHÔNG có markdown, KHÔNG có backtick):
 
 Yêu cầu:
 - Mỗi ngày có 4-6 hoạt động (sáng, trưa, chiều, tối)
-- Bao gồm: nơi ở, ăn uống, tham quan, cafe
+- Bao gồm: nơi ở, ăn uống, tham quan, cafe VÀ PHƯƠNG TIỆN DI CHUYỂN
+- QUAN TRỌNG: Ngày đầu tiên PHẢI có hoạt động di chuyển đến ${destination} (bookingType: "transport"), ví dụ: xe limousine, máy bay, tàu hỏa, xe khách
+- Ngày cuối PHẢI có hoạt động di chuyển về (bookingType: "transport")
+- Giữa các điểm tham quan xa nhau cần thêm phương tiện di chuyển (grab, taxi, xe máy thuê, xe bus...)
 - Địa điểm và quán ăn phải CÓ THẬT, nổi tiếng tại ${destination}
 - Giá phải thực tế theo thị trường Việt Nam
 - Chi phí dùng format: "200K", "1.2M", "Miễn phí"
 - bookingType phải là một trong: hotel, restaurant, attraction, cafe, transport
+- Các hoạt động transport phải ghi rõ phương tiện, hãng xe/hãng bay cụ thể nếu có
 - Tips phải thực sự hữu ích cho du khách`;
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
