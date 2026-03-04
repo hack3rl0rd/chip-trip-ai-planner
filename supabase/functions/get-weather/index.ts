@@ -6,11 +6,22 @@ const corsHeaders = {
 };
 
 // Common Vietnamese destination name mappings for geocoding
-const geoFallbacks: Record<string, string> = {
-  "đà lạt": "Da Lat", "đà nẵng": "Da Nang", "hà nội": "Hanoi", "hồ chí minh": "Ho Chi Minh City",
-  "phú quốc": "Phu Quoc", "nha trang": "Nha Trang", "hội an": "Hoi An", "huế": "Hue",
-  "sapa": "Sapa", "sa pa": "Sapa", "hạ long": "Ha Long", "ninh bình": "Ninh Binh",
-  "quy nhơn": "Quy Nhon", "vũng tàu": "Vung Tau", "cần thơ": "Can Tho", "đà lạt": "Dalat",
+const geoFallbacks: Record<string, string[]> = {
+  "đà lạt": ["Dalat", "Da Lat"],
+  "đà nẵng": ["Da Nang", "Danang"],
+  "hà nội": ["Hanoi", "Ha Noi"],
+  "hồ chí minh": ["Ho Chi Minh City", "Saigon"],
+  "phú quốc": ["Phu Quoc"],
+  "nha trang": ["Nha Trang"],
+  "hội an": ["Hoi An"],
+  "huế": ["Hue"],
+  "sapa": ["Sapa", "Sa Pa"],
+  "sa pa": ["Sapa", "Sa Pa"],
+  "hạ long": ["Ha Long", "Halong"],
+  "ninh bình": ["Ninh Binh"],
+  "quy nhơn": ["Quy Nhon"],
+  "vũng tàu": ["Vung Tau"],
+  "cần thơ": ["Can Tho"],
 };
 
 serve(async (req) => {
@@ -19,13 +30,19 @@ serve(async (req) => {
   try {
     const { destination, date } = await req.json();
 
-    // Try original name first, then fallback to English name
-    const searchNames = [destination, geoFallbacks[destination.toLowerCase()]].filter(Boolean);
+    // Try original name first, then fallback names
+    const fallbacks = geoFallbacks[destination.toLowerCase()] || [];
+    const searchNames = [destination, ...fallbacks];
     let geoResult = null;
 
-    for (const name of searchNames) {
-      const geoRes = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(name)}&count=1&language=vi`);
+    console.log("Searching weather for:", destination, "fallbacks:", fallbacks);
+
+    for (const searchName of searchNames) {
+      const url = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(searchName)}&count=1`;
+      console.log("Trying geocode:", url);
+      const geoRes = await fetch(url);
       const geoData = await geoRes.json();
+      console.log("Geocode result for", searchName, ":", JSON.stringify(geoData?.results?.[0]?.name || "NOT FOUND"));
       if (geoData.results?.length) {
         geoResult = geoData.results[0];
         break;
@@ -74,11 +91,11 @@ serve(async (req) => {
     };
 
     const daily = weatherData.daily;
-    const forecast = daily.time.map((date: string, i: number) => {
+    const forecast = daily.time.map((d: string, i: number) => {
       const code = daily.weathercode[i];
       const info = weatherCodes[code] || { label: "Không rõ", emoji: "❓", indoor: false };
       return {
-        date,
+        date: d,
         tempMax: daily.temperature_2m_max[i],
         tempMin: daily.temperature_2m_min[i],
         rain: daily.precipitation_sum[i],
