@@ -85,15 +85,20 @@ const Result = () => {
     }
 
     try {
-      const { error } = await supabase.from("trips").insert({
+      const { data, error } = await supabase.from("trips").insert({
         user_id: user.id,
         destination: trip.destination,
         start_date: trip.days[0]?.date || null,
         end_date: trip.days[trip.days.length - 1]?.date || null,
         trip_data: trip as any,
-      });
+      }).select("id").single();
       if (error) throw error;
       setSaved(true);
+      if (data) {
+        setDbTripId(data.id);
+        // Update URL to include trip ID without navigation
+        window.history.replaceState(null, "", `/result?id=${data.id}`);
+      }
       toast.success("Đã lưu kế hoạch!", {
         description: "Xem lại trong \"Chuyến đi của tôi\"",
         action: { label: "Xem ngay", onClick: () => navigate("/saved") },
@@ -104,7 +109,10 @@ const Result = () => {
   };
 
   const handleShare = async () => {
-    const shareData = { title: trip.title, text: `Xem lịch trình ${trip.title} trên Chip Trip! 🐥`, url: window.location.href };
+    const shareUrl = dbTripId
+      ? `${window.location.origin}/result?id=${dbTripId}`
+      : window.location.href;
+    const shareData = { title: trip.title, text: `Xem lịch trình ${trip.title} trên Chip Trip! 🐥`, url: shareUrl };
     try {
       if (navigator.share) { await navigator.share(shareData); }
       else { await navigator.clipboard.writeText(`${shareData.text}\n${shareData.url}`); toast.success("Đã sao chép link!"); }
