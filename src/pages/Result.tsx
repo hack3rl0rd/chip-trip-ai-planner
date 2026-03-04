@@ -191,7 +191,7 @@ const Result = () => {
     toast.success("Đã đổi hoạt động!");
   };
 
-  if (loadingTrip) {
+  if (loadingTrip || !trip) {
     return (
       <div className="min-h-screen bg-background">
         <Navbar />
