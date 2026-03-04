@@ -185,6 +185,18 @@ const Result = () => {
     toast.success("Đã đổi hoạt động!");
   };
 
+  if (loadingTrip) {
+    return (
+      <div className="min-h-screen bg-background">
+        <Navbar />
+        <div className="flex flex-col items-center justify-center pt-40 gap-4">
+          <Loader2 className="w-8 h-8 animate-spin text-chip-orange" />
+          <p className="text-muted-foreground">Đang tải lịch trình...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-background">
       <Navbar />
