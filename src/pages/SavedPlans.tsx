@@ -5,6 +5,7 @@ import { Calendar, Eye, Trash2, Plus, Pencil, Check, X, Loader2 } from "lucide-r
 import { Link, useNavigate } from "react-router-dom";
 import Navbar from "@/components/Navbar";
 import { type TripPlan } from "@/lib/trip-data";
+import { getPlaceImage } from "@/lib/place-image";
 import tripDanang from "@/assets/trip-danang.jpg";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/useAuth";
@@ -74,7 +75,7 @@ const SavedPlans = () => {
   };
 
   const getImage = (trip: TripPlan) => {
-    return trip.image || trip.days?.[0]?.items?.[0]?.image || tripDanang;
+    return trip.image || trip.days?.[0]?.items?.[0]?.image || getPlaceImage(trip.destination || trip.title, "attraction", 600, 400);
   };
 
   return (

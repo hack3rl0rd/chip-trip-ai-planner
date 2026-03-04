@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { ArrowLeft, MapPin, Star, Clock, Wallet, Lightbulb, ExternalLink, Hotel, UtensilsCrossed, Ticket, Coffee } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import type { TripItem } from "@/lib/trip-data";
+import { getPlaceImage } from "@/lib/place-image";
 
 const bookingConfig: Record<string, { icon: React.ElementType; label: string; platform: string }> = {
   hotel: { icon: Hotel, label: "Đặt phòng trên Traveloka", platform: "traveloka.com" },
@@ -46,7 +47,7 @@ const LocationDetail = () => {
       <div className="pt-20 pb-12">
         {/* Hero image */}
         <div className="relative h-[40vh] overflow-hidden">
-          <img src={item.image} alt={item.title} className="w-full h-full object-cover" />
+          <img src={item.image && item.image !== "/placeholder.svg" ? item.image : getPlaceImage(item.title, item.bookingType, 800, 500)} alt={item.title} className="w-full h-full object-cover" />
           <div className="absolute inset-0 bg-gradient-to-t from-background via-background/20 to-transparent" />
           <Button
             variant="soft"

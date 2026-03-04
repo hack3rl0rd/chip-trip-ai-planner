@@ -7,6 +7,7 @@ import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import Navbar from "@/components/Navbar";
 import { generateTrip, generatePackingList, type TripPlan, type TripItem } from "@/lib/trip-data";
+import { getPlaceImage } from "@/lib/place-image";
 import PackingList from "@/components/PackingList";
 import ExportDialog from "@/components/ExportDialog";
 import SuggestAlternativeModal from "@/components/SuggestAlternativeModal";
@@ -343,7 +344,7 @@ const Result = () => {
                                 </div>
                               )}
 
-                              <img src={item.image} alt={item.title} className="w-16 h-16 rounded-xl object-cover flex-shrink-0" />
+                              <img src={item.image && item.image !== "/placeholder.svg" ? item.image : getPlaceImage(item.title, item.bookingType)} alt={item.title} className="w-16 h-16 rounded-xl object-cover flex-shrink-0" />
                               <div className="flex-1 min-w-0">
                                 <div className="flex items-center gap-2">
                                   <span className="text-xs font-semibold text-chip-orange">{item.time}</span>

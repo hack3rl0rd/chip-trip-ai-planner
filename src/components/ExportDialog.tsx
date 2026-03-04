@@ -5,6 +5,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { FileImage, FileText, Link2, Download, Check } from "lucide-react";
 import { toast } from "sonner";
 import type { TripPlan } from "@/lib/trip-data";
+import { getPlaceImage } from "@/lib/place-image";
 
 interface Props {
   trip: TripPlan;
@@ -53,7 +54,7 @@ const ExportDialog = ({ trip, children }: Props) => {
 
         {/* Trip preview mini */}
         <div className="rounded-xl bg-muted/50 p-4 flex items-center gap-3">
-          <img src={trip.image} alt={trip.title} className="w-14 h-14 rounded-xl object-cover" />
+          <img src={trip.image || getPlaceImage(trip.destination, "attraction")} alt={trip.title} className="w-14 h-14 rounded-xl object-cover" />
           <div>
             <p className="font-semibold text-foreground text-sm">{trip.title}</p>
             <p className="text-xs text-muted-foreground">{trip.dateRange} • {trip.totalCost} VNĐ</p>

@@ -4,6 +4,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Button } from "@/components/ui/button";
 import { RefreshCw, UtensilsCrossed, Hotel, Camera, Coffee, MapPin, Loader2 } from "lucide-react";
 import type { TripItem } from "@/lib/trip-data";
+import { getPlaceImage } from "@/lib/place-image";
 
 const categories = [
   { id: "same", label: "Cùng loại", icon: RefreshCw, emoji: "🔄" },
@@ -113,7 +114,7 @@ const SuggestAlternativeModal = ({ open, onClose, item, onSelect }: Props) => {
           <div className="space-y-4">
             {/* Current item */}
             <div className="bg-muted/50 rounded-xl p-3 flex items-center gap-3">
-              <img src={item.image} alt={item.title} className="w-12 h-12 rounded-lg object-cover" />
+              <img src={item.image && item.image !== "/placeholder.svg" ? item.image : getPlaceImage(item.title, item.bookingType)} alt={item.title} className="w-12 h-12 rounded-lg object-cover" />
               <div className="flex-1 min-w-0">
                 <p className="text-xs text-muted-foreground">Đang thay thế:</p>
                 <p className="font-semibold text-foreground truncate">{item.title}</p>
