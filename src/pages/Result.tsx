@@ -110,9 +110,11 @@ const Result = () => {
   };
 
   const handleShare = async () => {
-    const shareUrl = dbTripId
-      ? `${window.location.origin}/result?id=${dbTripId}`
-      : window.location.href;
+    if (!dbTripId) {
+      toast.error("Vui lòng lưu lịch trình trước khi chia sẻ");
+      return;
+    }
+    const shareUrl = `${window.location.origin}/result?id=${dbTripId}`;
     const shareData = { title: trip.title, text: `Xem lịch trình ${trip.title} trên Chip Trip! 🐥`, url: shareUrl };
     try {
       if (navigator.share) { await navigator.share(shareData); }
