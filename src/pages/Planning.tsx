@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
@@ -16,6 +16,15 @@ const travelStyles = [
 
 const Planning = () => {
   const navigate = useNavigate();
+
+  // Auth guard: check if user is "logged in" (mock with localStorage)
+  useEffect(() => {
+    const isLoggedIn = localStorage.getItem("chiptrip_logged_in");
+    if (!isLoggedIn) {
+      navigate("/auth", { state: { from: "/planning" } });
+    }
+  }, [navigate]);
+
   const [step, setStep] = useState(0);
   const [destination, setDestination] = useState("");
   const [dates, setDates] = useState({ start: "", end: "" });

@@ -1,6 +1,6 @@
 import { Link, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { MapPin, User, Zap, Moon, Sun } from "lucide-react";
+import { MapPin, User, Zap, Moon, Sun, Crown } from "lucide-react";
 import { getCredits } from "@/lib/trip-data";
 import { useEffect, useState } from "react";
 
@@ -60,6 +60,11 @@ const Navbar = () => {
             {dark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
           </button>
 
+          <Link to="/premium">
+            <Button variant="ghost" size="sm" className="hidden sm:inline-flex gap-1.5 text-chip-orange hover:text-chip-orange">
+              <Crown className="w-4 h-4" /> Premium
+            </Button>
+          </Link>
           <Link to="/saved">
             <Button variant="ghost" size="sm" className={`hidden sm:inline-flex ${location.pathname === "/saved" ? "bg-chip-yellow-light" : ""}`}>
               Chuyến đi của tôi

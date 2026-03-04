@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,6 +8,9 @@ import { MapPin, Mail, Lock, User, Eye, EyeOff, ArrowLeft, Sparkles } from "luci
 import { toast } from "sonner";
 
 const Auth = () => {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const from = (location.state as any)?.from || "/";
   const [isLogin, setIsLogin] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -32,7 +35,9 @@ const Auth = () => {
     // Simulate — sẽ kết nối backend sau
     setTimeout(() => {
       setLoading(false);
-      toast.success(isLogin ? "Đăng nhập thành công! 🎉" : "Đăng ký thành công! Kiểm tra email nhé 📩");
+      localStorage.setItem("chiptrip_logged_in", "true");
+      toast.success(isLogin ? "Đăng nhập thành công! 🎉" : "Đăng ký thành công! 🎉");
+      navigate(from);
     }, 1500);
   };
 
