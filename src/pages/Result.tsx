@@ -167,10 +167,17 @@ const Result = () => {
                     <Wallet className="w-4 h-4 text-chip-orange" /> Dự toán chi phí
                   </h3>
                   <div className="space-y-2">
-                    {trip.days.map(day => {
+                {trip.days.map(day => {
                       const dayCost = day.items.reduce((sum, item) => {
-                        const num = parseInt(item.cost.replace(/[^0-9]/g, ""), 10);
-                        return sum + (isNaN(num) ? 0 : num);
+                        const costStr = item.cost.toLowerCase().replace(/[^0-9.km]/g, "");
+                        if (!costStr || costStr === "") return sum;
+                        const numMatch = costStr.match(/([0-9.]+)/);
+                        if (!numMatch) return sum;
+                        const num = parseFloat(numMatch[1]);
+                        if (isNaN(num)) return sum;
+                        if (costStr.includes("m")) return sum + num * 1000;
+                        if (costStr.includes("k")) return sum + num;
+                        return sum + num;
                       }, 0);
                       return (
                         <div key={day.day} className="flex items-center justify-between text-sm">
@@ -180,10 +187,24 @@ const Result = () => {
                       );
                     })}
                   </div>
-                  <div className="border-t border-border pt-3 flex items-center justify-between">
-                    <span className="font-semibold text-foreground">Tổng ước tính</span>
-                    <span className="text-lg font-bold text-gradient">{trip.totalCost} VNĐ</span>
-                  </div>
+                  {(() => {
+                    const total = trip.days.reduce((s, day) => s + day.items.reduce((ds, item) => {
+                      const costStr = item.cost.toLowerCase().replace(/[^0-9.km]/g, "");
+                      const numMatch = costStr.match(/([0-9.]+)/);
+                      if (!numMatch) return ds;
+                      const num = parseFloat(numMatch[1]);
+                      if (isNaN(num)) return ds;
+                      if (costStr.includes("m")) return ds + num * 1000;
+                      if (costStr.includes("k")) return ds + num;
+                      return ds + num;
+                    }, 0), 0);
+                    return (
+                      <div className="border-t border-border pt-3 flex items-center justify-between">
+                        <span className="font-semibold text-foreground">Tổng ước tính</span>
+                        <span className="text-lg font-bold text-gradient">{total >= 1000 ? `${(total / 1000).toFixed(1)}M` : `${total}K`} VNĐ</span>
+                      </div>
+                    );
+                  })()}
                 </div>
 
                 <div className="rounded-2xl border border-chip-yellow/30 bg-gradient-warm p-5 space-y-3">
