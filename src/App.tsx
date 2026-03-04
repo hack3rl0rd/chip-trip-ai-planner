@@ -9,6 +9,7 @@ import Result from "./pages/Result";
 import SavedPlans from "./pages/SavedPlans";
 import LocationDetail from "./pages/LocationDetail";
 import Auth from "./pages/Auth";
+import Premium from "./pages/Premium";
 import NotFound from "./pages/NotFound";
 import MobileNav from "./components/MobileNav";
 
@@ -27,6 +28,7 @@ const App = () => (
           <Route path="/saved" element={<SavedPlans />} />
           <Route path="/location" element={<LocationDetail />} />
           <Route path="/auth" element={<Auth />} />
+          <Route path="/premium" element={<Premium />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
         <MobileNav />
