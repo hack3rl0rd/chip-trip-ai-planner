@@ -14,13 +14,143 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      packing_items: {
+        Row: {
+          category: string
+          created_at: string
+          id: string
+          item: string
+          packed: boolean | null
+          trip_id: string
+        }
+        Insert: {
+          category: string
+          created_at?: string
+          id?: string
+          item: string
+          packed?: boolean | null
+          trip_id: string
+        }
+        Update: {
+          category?: string
+          created_at?: string
+          id?: string
+          item?: string
+          packed?: boolean | null
+          trip_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "packing_items_trip_id_fkey"
+            columns: ["trip_id"]
+            isOneToOne: false
+            referencedRelation: "trips"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      profiles: {
+        Row: {
+          avatar_url: string | null
+          created_at: string
+          display_name: string | null
+          id: string
+          travel_preferences: Json | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          avatar_url?: string | null
+          created_at?: string
+          display_name?: string | null
+          id?: string
+          travel_preferences?: Json | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          avatar_url?: string | null
+          created_at?: string
+          display_name?: string | null
+          id?: string
+          travel_preferences?: Json | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      search_history: {
+        Row: {
+          created_at: string
+          destination: string
+          id: string
+          search_params: Json | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          destination: string
+          id?: string
+          search_params?: Json | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          destination?: string
+          id?: string
+          search_params?: Json | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      trips: {
+        Row: {
+          budget_level: number | null
+          created_at: string
+          destination: string
+          end_date: string | null
+          id: string
+          start_date: string | null
+          styles: string[] | null
+          travelers: number | null
+          trip_data: Json
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          budget_level?: number | null
+          created_at?: string
+          destination: string
+          end_date?: string | null
+          id?: string
+          start_date?: string | null
+          styles?: string[] | null
+          travelers?: number | null
+          trip_data?: Json
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          budget_level?: number | null
+          created_at?: string
+          destination?: string
+          end_date?: string | null
+          id?: string
+          start_date?: string | null
+          styles?: string[] | null
+          travelers?: number | null
+          trip_data?: Json
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      user_owns_trip: { Args: { _trip_id: string }; Returns: boolean }
     }
     Enums: {
       [_ in never]: never
