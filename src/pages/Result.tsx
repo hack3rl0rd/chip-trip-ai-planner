@@ -10,6 +10,9 @@ import { generateTrip, generatePackingList, type TripPlan, type TripItem } from 
 import PackingList from "@/components/PackingList";
 import ExportDialog from "@/components/ExportDialog";
 import SuggestAlternativeModal from "@/components/SuggestAlternativeModal";
+import WeatherWidget from "@/components/WeatherWidget";
+import GroupPanel from "@/components/GroupPanel";
+import SplitBill from "@/components/SplitBill";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 
