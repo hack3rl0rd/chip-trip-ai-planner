@@ -5,23 +5,40 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+// Common Vietnamese destination name mappings for geocoding
+const geoFallbacks: Record<string, string> = {
+  "đà lạt": "Da Lat", "đà nẵng": "Da Nang", "hà nội": "Hanoi", "hồ chí minh": "Ho Chi Minh City",
+  "phú quốc": "Phu Quoc", "nha trang": "Nha Trang", "hội an": "Hoi An", "huế": "Hue",
+  "sapa": "Sapa", "sa pa": "Sapa", "hạ long": "Ha Long", "ninh bình": "Ninh Binh",
+  "quy nhơn": "Quy Nhon", "vũng tàu": "Vung Tau", "cần thơ": "Can Tho", "đà lạt": "Dalat",
+};
+
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
     const { destination, date } = await req.json();
 
-    // Use Open-Meteo (free, no API key needed) with geocoding
-    const geoRes = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(destination)}&count=1&language=vi`);
-    const geoData = await geoRes.json();
+    // Try original name first, then fallback to English name
+    const searchNames = [destination, geoFallbacks[destination.toLowerCase()]].filter(Boolean);
+    let geoResult = null;
 
-    if (!geoData.results?.length) {
+    for (const name of searchNames) {
+      const geoRes = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(name)}&count=1&language=vi`);
+      const geoData = await geoRes.json();
+      if (geoData.results?.length) {
+        geoResult = geoData.results[0];
+        break;
+      }
+    }
+
+    if (!geoResult) {
       return new Response(JSON.stringify({ error: "Không tìm thấy địa điểm" }), {
         status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    const { latitude, longitude, name } = geoData.results[0];
+    const { latitude, longitude, name } = geoResult;
 
     // Get weather forecast
     const weatherRes = await fetch(

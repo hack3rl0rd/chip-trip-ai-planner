@@ -259,6 +259,7 @@ export type Database = {
     }
     Functions: {
       user_in_trip: { Args: { _trip_id: string }; Returns: boolean }
+      user_is_trip_member: { Args: { _trip_id: string }; Returns: boolean }
       user_owns_trip: { Args: { _trip_id: string }; Returns: boolean }
     }
     Enums: {
