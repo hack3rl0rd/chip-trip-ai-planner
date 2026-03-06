@@ -1,6 +1,7 @@
+import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { Sparkles, MapPin, Calendar, Wallet, ArrowRight, Star, Users, Zap, CheckCircle } from "lucide-react";
 import heroImage from "@/assets/hero-travel.jpg";
 import tripDanang from "@/assets/trip-danang.jpg";
