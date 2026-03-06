@@ -7,6 +7,7 @@ interface AuthContextType {
   session: Session | null;
   loading: boolean;
   profile: { display_name: string | null; avatar_url: string | null } | null;
+  isAdmin: boolean;
   signOut: () => Promise<void>;
 }
 
@@ -15,6 +16,7 @@ const AuthContext = createContext<AuthContextType>({
   session: null,
   loading: true,
   profile: null,
+  isAdmin: false,
   signOut: async () => {},
 });
 
@@ -23,6 +25,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const [profile, setProfile] = useState<{ display_name: string | null; avatar_url: string | null } | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {
     // Set up auth listener FIRST
@@ -34,15 +37,25 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       if (session?.user) {
         // Fetch profile with setTimeout to avoid deadlock
         setTimeout(async () => {
-          const { data } = await supabase
-            .from("profiles")
-            .select("display_name, avatar_url")
-            .eq("user_id", session.user.id)
-            .single();
-          if (data) setProfile(data);
+          const [profileRes, roleRes] = await Promise.all([
+            supabase
+              .from("profiles")
+              .select("display_name, avatar_url")
+              .eq("user_id", session.user.id)
+              .single(),
+            supabase
+              .from("user_roles")
+              .select("role")
+              .eq("user_id", session.user.id)
+              .eq("role", "admin")
+              .maybeSingle(),
+          ]);
+          if (profileRes.data) setProfile(profileRes.data);
+          setIsAdmin(!!roleRes.data);
         }, 0);
       } else {
         setProfile(null);
+        setIsAdmin(false);
       }
     });
 
@@ -61,10 +74,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setUser(null);
     setSession(null);
     setProfile(null);
+    setIsAdmin(false);
   };
 
   return (
-    <AuthContext.Provider value={{ user, session, loading, profile, signOut }}>
+    <AuthContext.Provider value={{ user, session, loading, profile, isAdmin, signOut }}>
       {children}
     </AuthContext.Provider>
   );
