@@ -113,21 +113,36 @@ const [heroIndex, setHeroIndex] = useState(0);
               />
               <div className="absolute inset-0 bg-gradient-to-t from-black/30 to-transparent" />
 
-              <motion.div
-                animate={{ y: [0, -8, 0] }}
-                transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
-                className="absolute bottom-6 left-6 right-6 bg-background/90 backdrop-blur-md rounded-2xl p-4 shadow-card"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-gradient-accent flex items-center justify-center">
-                    <MapPin className="w-5 h-5 text-accent-foreground" />
-                  </div>
-                  <div>
-                    <p className="font-display font-semibold text-foreground">Vịnh Hạ Long</p>
-                    <p className="text-sm text-muted-foreground">3 ngày • 2.5M VNĐ • Chữa lành</p>
-                  </div>
+              <div className="absolute bottom-6 left-6 right-6 bg-background/90 backdrop-blur-md rounded-2xl p-4 shadow-card overflow-hidden">
+                <AnimatePresence mode="wait">
+                  <motion.div
+                    key={heroIndex}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -20 }}
+                    transition={{ duration: 0.4 }}
+                    className="flex items-center gap-3"
+                  >
+                    <div className="w-10 h-10 rounded-xl bg-gradient-accent flex items-center justify-center flex-shrink-0">
+                      <MapPin className="w-5 h-5 text-accent-foreground" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="font-display font-semibold text-foreground">{heroDestinations[heroIndex].name}</p>
+                      <p className="text-sm text-muted-foreground">{heroDestinations[heroIndex].info}</p>
+                    </div>
+                  </motion.div>
+                </AnimatePresence>
+                {/* Progress dots */}
+                <div className="flex gap-1.5 mt-3 justify-center">
+                  {heroDestinations.map((_, i) => (
+                    <button
+                      key={i}
+                      onClick={() => setHeroIndex(i)}
+                      className={`h-1.5 rounded-full transition-all duration-300 ${i === heroIndex ? "w-6 bg-chip-orange" : "w-1.5 bg-border"}`}
+                    />
+                  ))}
                 </div>
-              </motion.div>
+              </div>
             </div>
           </motion.div>
         </div>
