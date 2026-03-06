@@ -1,6 +1,7 @@
+import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { Sparkles, MapPin, Calendar, Wallet, ArrowRight, Star, Users, Zap, CheckCircle } from "lucide-react";
 import heroImage from "@/assets/hero-travel.jpg";
 import tripDanang from "@/assets/trip-danang.jpg";
@@ -8,6 +9,15 @@ import tripSapa from "@/assets/trip-sapa.jpg";
 import tripPhuquoc from "@/assets/trip-phuquoc.jpg";
 import tripHoian from "@/assets/trip-hoian.jpg";
 import Navbar from "@/components/Navbar";
+
+const heroDestinations = [
+  { name: "Vịnh Hạ Long", info: "3 ngày • 2.5M VNĐ • Chữa lành" },
+  { name: "Đà Nẵng", info: "3 ngày • 3M VNĐ • Biển & ẩm thực" },
+  { name: "Sapa", info: "3 ngày • 4M VNĐ • Mạo hiểm" },
+  { name: "Phú Quốc", info: "4 ngày • 5M VNĐ • Nghỉ dưỡng" },
+  { name: "Hội An", info: "2 ngày • 2M VNĐ • Sống ảo" },
+  { name: "Đà Lạt", info: "3 ngày • 3M VNĐ • Chữa lành" },
+];
 
 const popularDestinations = [
   { name: "Đà Nẵng", emoji: "🏖️", desc: "Biển xanh & Cầu Vàng", image: tripDanang, days: "3N2Đ", price: "~3M" },
@@ -29,6 +39,15 @@ const testimonials = [
 ];
 
 const Index = () => {
+const [heroIndex, setHeroIndex] = useState(0);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setHeroIndex((prev) => (prev + 1) % heroDestinations.length);
+    }, 3000);
+    return () => clearInterval(interval);
+  }, []);
+
   return (
     <div className="min-h-screen bg-background">
       <Navbar />
@@ -94,21 +113,36 @@ const Index = () => {
               />
               <div className="absolute inset-0 bg-gradient-to-t from-black/30 to-transparent" />
 
-              <motion.div
-                animate={{ y: [0, -8, 0] }}
-                transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
-                className="absolute bottom-6 left-6 right-6 bg-background/90 backdrop-blur-md rounded-2xl p-4 shadow-card"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-gradient-accent flex items-center justify-center">
-                    <MapPin className="w-5 h-5 text-accent-foreground" />
-                  </div>
-                  <div>
-                    <p className="font-display font-semibold text-foreground">Vịnh Hạ Long</p>
-                    <p className="text-sm text-muted-foreground">3 ngày • 2.5M VNĐ • Chữa lành</p>
-                  </div>
+              <div className="absolute bottom-6 left-6 right-6 bg-background/90 backdrop-blur-md rounded-2xl p-4 shadow-card overflow-hidden">
+                <AnimatePresence mode="wait">
+                  <motion.div
+                    key={heroIndex}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -20 }}
+                    transition={{ duration: 0.4 }}
+                    className="flex items-center gap-3"
+                  >
+                    <div className="w-10 h-10 rounded-xl bg-gradient-accent flex items-center justify-center flex-shrink-0">
+                      <MapPin className="w-5 h-5 text-accent-foreground" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="font-display font-semibold text-foreground">{heroDestinations[heroIndex].name}</p>
+                      <p className="text-sm text-muted-foreground">{heroDestinations[heroIndex].info}</p>
+                    </div>
+                  </motion.div>
+                </AnimatePresence>
+                {/* Progress dots */}
+                <div className="flex gap-1.5 mt-3 justify-center">
+                  {heroDestinations.map((_, i) => (
+                    <button
+                      key={i}
+                      onClick={() => setHeroIndex(i)}
+                      className={`h-1.5 rounded-full transition-all duration-300 ${i === heroIndex ? "w-6 bg-chip-orange" : "w-1.5 bg-border"}`}
+                    />
+                  ))}
                 </div>
-              </motion.div>
+              </div>
             </div>
           </motion.div>
         </div>
