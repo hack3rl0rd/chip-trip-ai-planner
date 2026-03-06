@@ -663,6 +663,33 @@ const AdminUsers = () => {
           </motion.div>
         </div>
       </div>
+
+      {/* Avatar preview modal */}
+      <AnimatePresence>
+        {previewAvatar && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
+            onClick={() => setPreviewAvatar(null)}
+          >
+            <motion.div
+              initial={{ scale: 0.8, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.8, opacity: 0 }}
+              className="bg-card rounded-3xl border border-border shadow-xl p-6 max-w-sm w-full text-center"
+              onClick={e => e.stopPropagation()}
+            >
+              <img src={previewAvatar.url} alt="" className="w-40 h-40 rounded-full object-cover mx-auto border-4 border-primary/20 mb-4" />
+              <p className="text-lg font-semibold text-foreground">{previewAvatar.name}</p>
+              <Button variant="ghost" size="sm" className="mt-4" onClick={() => setPreviewAvatar(null)}>
+                Đóng
+              </Button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };
