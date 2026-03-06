@@ -1,10 +1,10 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { User, Mail, Heart, Save, Loader2, ArrowLeft } from "lucide-react";
+import { User, Mail, Heart, Save, Loader2, ArrowLeft, Camera } from "lucide-react";
 import { toast } from "sonner";
 import Navbar from "@/components/Navbar";
 import { useAuth } from "@/hooks/useAuth";
@@ -24,7 +24,9 @@ const Profile = () => {
   const [avatarUrl, setAvatarUrl] = useState("");
   const [preferences, setPreferences] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [tripCount, setTripCount] = useState(0);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -41,7 +43,6 @@ const Profile = () => {
 
   useEffect(() => {
     if (user) {
-      // Fetch preferences
       supabase
         .from("profiles")
         .select("travel_preferences")
@@ -52,7 +53,6 @@ const Profile = () => {
             setPreferences(data.travel_preferences as string[]);
           }
         });
-      // Fetch trip count
       supabase
         .from("trips")
         .select("id", { count: "exact", head: true })
@@ -62,6 +62,54 @@ const Profile = () => {
 
   const togglePref = (id: string) => {
     setPreferences(prev => prev.includes(id) ? prev.filter(p => p !== id) : [...prev, id]);
+  };
+
+  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !user) return;
+
+    // Validate file
+    if (!file.type.startsWith("image/")) {
+      toast.error("Vui lòng chọn file ảnh");
+      return;
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      toast.error("Ảnh không được vượt quá 2MB");
+      return;
+    }
+
+    setUploadingAvatar(true);
+    try {
+      const fileExt = file.name.split(".").pop();
+      const filePath = `${user.id}/avatar.${fileExt}`;
+
+      // Upload to storage
+      const { error: uploadError } = await supabase.storage
+        .from("avatars")
+        .upload(filePath, file, { upsert: true });
+
+      if (uploadError) throw uploadError;
+
+      // Get public URL
+      const { data: { publicUrl } } = supabase.storage
+        .from("avatars")
+        .getPublicUrl(filePath);
+
+      // Add cache buster to force refresh
+      const newUrl = `${publicUrl}?t=${Date.now()}`;
+      setAvatarUrl(newUrl);
+
+      // Save to profile immediately
+      await supabase
+        .from("profiles")
+        .update({ avatar_url: newUrl })
+        .eq("user_id", user.id);
+
+      toast.success("Đã cập nhật ảnh đại diện! 🎉");
+    } catch (err: any) {
+      toast.error("Upload thất bại: " + (err.message || "Lỗi không xác định"));
+    }
+    setUploadingAvatar(false);
   };
 
   const handleSave = async () => {
@@ -100,13 +148,38 @@ const Profile = () => {
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="bg-card rounded-2xl border border-border shadow-card p-8 space-y-8">
             {/* Avatar & stats */}
             <div className="flex flex-col items-center gap-4">
-              {avatarUrl ? (
-                <img src={avatarUrl} alt="Avatar" className="w-24 h-24 rounded-full object-cover border-4 border-chip-orange/20" />
-              ) : (
-                <div className="w-24 h-24 rounded-full bg-gradient-accent flex items-center justify-center text-3xl font-bold text-accent-foreground">
-                  {initials}
+              <div className="relative group">
+                {avatarUrl ? (
+                  <img src={avatarUrl} alt="Avatar" className="w-24 h-24 rounded-full object-cover border-4 border-primary/20" />
+                ) : (
+                  <div className="w-24 h-24 rounded-full bg-gradient-accent flex items-center justify-center text-3xl font-bold text-accent-foreground">
+                    {initials}
+                  </div>
+                )}
+                {/* Upload overlay */}
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={uploadingAvatar}
+                  className="absolute inset-0 rounded-full bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+                >
+                  {uploadingAvatar ? (
+                    <Loader2 className="w-6 h-6 text-white animate-spin" />
+                  ) : (
+                    <Camera className="w-6 h-6 text-white" />
+                  )}
+                </button>
+                {/* Small camera badge */}
+                <div className="absolute -bottom-1 -right-1 w-8 h-8 rounded-full bg-primary flex items-center justify-center shadow-md cursor-pointer" onClick={() => fileInputRef.current?.click()}>
+                  <Camera className="w-4 h-4 text-primary-foreground" />
                 </div>
-              )}
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={handleAvatarUpload}
+                />
+              </div>
               <div className="text-center">
                 <h1 className="text-2xl font-bold text-foreground">{displayName || "Chưa đặt tên"}</h1>
                 <p className="text-sm text-muted-foreground">{user?.email}</p>
@@ -139,11 +212,6 @@ const Profile = () => {
                   <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                   <Input value={user?.email || ""} disabled className="pl-10 h-12 rounded-xl opacity-60" />
                 </div>
-              </div>
-
-              <div>
-                <Label className="text-foreground font-medium mb-1.5 block">URL Avatar</Label>
-                <Input value={avatarUrl} onChange={e => setAvatarUrl(e.target.value)} placeholder="https://..." className="h-12 rounded-xl" />
               </div>
 
               <div>
