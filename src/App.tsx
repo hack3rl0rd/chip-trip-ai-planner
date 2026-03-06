@@ -14,6 +14,7 @@ import Premium from "./pages/Premium";
 import Checkout from "./pages/Checkout";
 import Profile from "./pages/Profile";
 import AdminUsers from "./pages/AdminUsers";
+import AdminLogin from "./pages/AdminLogin";
 import NotFound from "./pages/NotFound";
 import MobileNav from "./components/MobileNav";
 
