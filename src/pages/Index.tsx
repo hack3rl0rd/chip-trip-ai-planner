@@ -108,11 +108,18 @@ const [heroIndex, setHeroIndex] = useState(0);
             className="relative hidden lg:block"
           >
             <div className="relative rounded-3xl overflow-hidden shadow-warm">
-              <img
-                src={heroImage}
-                alt="Du lịch Việt Nam - Vịnh Hạ Long"
-                className="w-full h-[500px] object-cover"
-              />
+              <AnimatePresence mode="wait">
+                <motion.img
+                  key={heroIndex}
+                  initial={{ opacity: 0, scale: 1.05 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.95 }}
+                  transition={{ duration: 0.6 }}
+                  src={heroDestinations[heroIndex].image}
+                  alt={heroDestinations[heroIndex].name}
+                  className="w-full h-[500px] object-cover"
+                />
+              </AnimatePresence>
               <div className="absolute inset-0 bg-gradient-to-t from-black/30 to-transparent" />
 
               <div className="absolute bottom-6 left-6 right-6 bg-background/90 backdrop-blur-md rounded-2xl p-4 shadow-card overflow-hidden">
