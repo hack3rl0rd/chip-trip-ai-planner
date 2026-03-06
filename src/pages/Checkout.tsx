@@ -15,14 +15,14 @@ const planDetails: Record<string, { name: string; price: string; period: string;
     price: "49,000",
     period: "/gói",
     credits: 1,
-    features: ["1 lượt tạo lịch trình AI", "Đề xuất thay thế thông minh", "Lịch trình chi tiết", "Export PDF + Ảnh", "Bảo hiểm du lịch giảm 20%"],
+    features: ["1 lượt tạo lịch trình AI", "Lịch trình chi tiết theo giờ", "Đề xuất thay thế địa điểm", "Export PDF + Ảnh"],
   },
   pro: {
     name: "Pro Traveler",
     price: "109,000",
     period: "/gói",
     credits: 3,
-    features: ["3 lượt tạo lịch trình AI", "Đề xuất khách sạn + deal ẩn", "Hỗ trợ 24/7", "Chia sẻ lịch trình nhóm", "Early access tính năng mới"],
+    features: ["3 lượt tạo lịch trình AI", "Tất cả tính năng Premium", "Chia sẻ & lên kế hoạch nhóm", "Chia tiền nhóm tự động", "Hỗ trợ ưu tiên 24/7"],
   },
 };
 
