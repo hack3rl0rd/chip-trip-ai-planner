@@ -26,6 +26,7 @@ const Profile = () => {
   const [saving, setSaving] = useState(false);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [tripCount, setTripCount] = useState(0);
+  const [showAvatarPreview, setShowAvatarPreview] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
