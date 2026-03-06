@@ -37,6 +37,7 @@ const App = () => (
             <Route path="/premium" element={<Premium />} />
             <Route path="/checkout" element={<Checkout />} />
             <Route path="/profile" element={<Profile />} />
+            <Route path="/admin/login" element={<AdminLogin />} />
             <Route path="/admin/users" element={<AdminUsers />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
