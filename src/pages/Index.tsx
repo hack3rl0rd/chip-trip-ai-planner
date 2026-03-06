@@ -10,6 +10,15 @@ import tripPhuquoc from "@/assets/trip-phuquoc.jpg";
 import tripHoian from "@/assets/trip-hoian.jpg";
 import Navbar from "@/components/Navbar";
 
+const heroDestinations = [
+  { name: "Vịnh Hạ Long", info: "3 ngày • 2.5M VNĐ • Chữa lành" },
+  { name: "Đà Nẵng", info: "3 ngày • 3M VNĐ • Biển & ẩm thực" },
+  { name: "Sapa", info: "3 ngày • 4M VNĐ • Mạo hiểm" },
+  { name: "Phú Quốc", info: "4 ngày • 5M VNĐ • Nghỉ dưỡng" },
+  { name: "Hội An", info: "2 ngày • 2M VNĐ • Sống ảo" },
+  { name: "Đà Lạt", info: "3 ngày • 3M VNĐ • Chữa lành" },
+];
+
 const popularDestinations = [
   { name: "Đà Nẵng", emoji: "🏖️", desc: "Biển xanh & Cầu Vàng", image: tripDanang, days: "3N2Đ", price: "~3M" },
   { name: "Sapa", emoji: "🏔️", desc: "Ruộng bậc thang & Fansipan", image: tripSapa, days: "3N2Đ", price: "~4M" },
