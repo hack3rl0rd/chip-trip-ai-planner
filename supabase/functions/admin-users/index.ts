@@ -127,6 +127,10 @@ Deno.serve(async (req) => {
       const tripCounts: Record<string, number> = {};
       (trips || []).forEach(t => { tripCounts[t.user_id] = (tripCounts[t.user_id] || 0) + 1; });
 
+      // Get admin roles
+      const { data: adminRoles } = await supabase.from("user_roles").select("user_id, role").eq("role", "admin");
+      const adminSet = new Set((adminRoles || []).map(r => r.user_id));
+
       const result = (profiles || []).map(p => {
         const authUser = usersMap.get(p.user_id);
         return {
@@ -136,6 +140,7 @@ Deno.serve(async (req) => {
           provider: authUser?.app_metadata?.provider || "email",
           email_confirmed: !!authUser?.email_confirmed_at,
           trip_count: tripCounts[p.user_id] || 0,
+          is_admin: adminSet.has(p.user_id),
         };
       });
 

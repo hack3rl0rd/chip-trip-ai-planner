@@ -30,6 +30,7 @@ interface UserInfo {
   provider: string;
   email_confirmed: boolean;
   trip_count: number;
+  is_admin: boolean;
 }
 
 interface TripInfo {
@@ -356,7 +357,14 @@ const AdminUsers = () => {
                                   </div>
                                 )}
                                 <div>
-                                  <p className="font-medium text-foreground text-sm">{u.display_name || "Chưa đặt tên"}</p>
+                                  <div className="flex items-center gap-2">
+                                    <p className="font-medium text-foreground text-sm">{u.display_name || "Chưa đặt tên"}</p>
+                                    {u.is_admin && (
+                                      <Badge variant="default" className="text-[10px] px-1.5 py-0 h-4 bg-primary/15 text-primary border-0">
+                                        Admin
+                                      </Badge>
+                                    )}
+                                  </div>
                                   <p className="text-xs text-muted-foreground sm:hidden">{u.email}</p>
                                 </div>
                               </div>
