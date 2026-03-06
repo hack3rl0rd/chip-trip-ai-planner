@@ -151,7 +151,12 @@ const Profile = () => {
             <div className="flex flex-col items-center gap-4">
               <div className="relative group">
                 {avatarUrl ? (
-                  <img src={avatarUrl} alt="Avatar" className="w-24 h-24 rounded-full object-cover border-4 border-primary/20" />
+                  <img
+                    src={avatarUrl}
+                    alt="Avatar"
+                    className="w-24 h-24 rounded-full object-cover border-4 border-primary/20 cursor-pointer"
+                    onClick={() => setShowAvatarPreview(true)}
+                  />
                 ) : (
                   <div className="w-24 h-24 rounded-full bg-gradient-accent flex items-center justify-center text-3xl font-bold text-accent-foreground">
                     {initials}
