@@ -7,19 +7,22 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { useState } from "react";
 import { toast } from "sonner";
 import Navbar from "@/components/Navbar";
+import { addCredits } from "@/lib/trip-data";
 
-const planDetails: Record<string, { name: string; price: string; period: string; features: string[] }> = {
+const planDetails: Record<string, { name: string; price: string; period: string; credits: number; features: string[] }> = {
   premium: {
     name: "Premium",
     price: "79,000",
-    period: "/tháng",
-    features: ["Không giới hạn lượt AI", "Đề xuất thay thế thông minh", "Lịch trình chi tiết", "Export PDF + Ảnh", "Bảo hiểm du lịch giảm 20%"],
+    period: "/gói",
+    credits: 3,
+    features: ["3 lượt tạo lịch trình AI", "Đề xuất thay thế thông minh", "Lịch trình chi tiết", "Export PDF + Ảnh", "Bảo hiểm du lịch giảm 20%"],
   },
   pro: {
     name: "Pro Traveler",
     price: "199,000",
-    period: "/tháng",
-    features: ["Tất cả Premium", "Đề xuất khách sạn + deal ẩn", "Hỗ trợ 24/7", "Chia sẻ lịch trình nhóm", "Early access tính năng mới"],
+    period: "/gói",
+    credits: 5,
+    features: ["5 lượt tạo lịch trình AI", "Đề xuất khách sạn + deal ẩn", "Hỗ trợ 24/7", "Chia sẻ lịch trình nhóm", "Early access tính năng mới"],
   },
 };
 
@@ -63,12 +66,14 @@ const Checkout = () => {
     const delay = method === "bank" ? 1500 : 2000;
     setTimeout(() => {
       setProcessing(false);
+      // Add credits to user account
+      addCredits(plan.credits);
       if (method === "bank") {
         toast.success("Đã ghi nhận! Chúng tôi sẽ xác nhận khi nhận được tiền 🎉");
       } else {
-        toast.success(`Đã nâng cấp lên ${plan.name} thành công! 🎉`);
+        toast.success(`Đã nâng cấp ${plan.name}! +${plan.credits} lượt AI 🎉`);
       }
-      navigate("/premium");
+      navigate("/planning");
     }, delay);
   };
 
@@ -334,7 +339,7 @@ const Checkout = () => {
                 </div>
 
                 <p className="text-xs text-muted-foreground">
-                  Tự động gia hạn mỗi tháng. Hủy bất cứ lúc nào.
+                  Gói lượt AI sẽ được cộng ngay sau khi thanh toán thành công.
                 </p>
               </div>
             </div>

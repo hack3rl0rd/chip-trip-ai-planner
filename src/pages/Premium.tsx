@@ -6,7 +6,7 @@ import Navbar from "@/components/Navbar";
 
 const features = [
   { icon: Sparkles, title: "AI đề xuất thông minh", desc: "Gợi ý quán ăn, khách sạn 5 sao với giá ẩn và review thật từ cộng đồng" },
-  { icon: Zap, title: "Không giới hạn lượt AI", desc: "Tạo bao nhiêu lịch trình cũng được, không lo hết credits" },
+  { icon: Zap, title: "Mua lượt tạo lịch trình", desc: "Mua gói lượt AI để tạo lịch trình, dùng hết mua thêm" },
   { icon: MapPin, title: "Lịch trình chi tiết hơn", desc: "Thêm giờ di chuyển, khoảng cách, phương tiện tối ưu giữa các điểm" },
   { icon: UtensilsCrossed, title: "Đề xuất thay thế thông minh", desc: "Không thích chỗ nào? AI gợi ý 3-5 lựa chọn thay thế phù hợp gu của bạn" },
   { icon: Shield, title: "Bảo hiểm du lịch tích hợp", desc: "Mua bảo hiểm trực tiếp trong app với giá ưu đãi đặc biệt" },

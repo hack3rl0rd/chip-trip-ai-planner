@@ -69,37 +69,6 @@ Deno.serve(async (req) => {
       });
     }
 
-    // CREATE ADMIN USER (bootstrap action - also allowed without existing admin if no admins exist)
-    if (action === "create-admin") {
-      const body = await req.json();
-      const { email, password } = body;
-      if (!email || !password) throw new Error("email and password required");
-
-      // Create user via admin API
-      const { data: newUser, error: createError } = await supabase.auth.admin.createUser({
-        email,
-        password,
-        email_confirm: true,
-      });
-      if (createError) throw createError;
-
-      // Assign admin role
-      await supabase.from("user_roles").insert({
-        user_id: newUser.user.id,
-        role: "admin",
-      });
-
-      // Create profile
-      await supabase.from("profiles").insert({
-        user_id: newUser.user.id,
-        display_name: "Admin ChipTrip",
-      });
-
-      return new Response(JSON.stringify({ success: true, user_id: newUser.user.id }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
     // Helper to log activity
     const logActivity = async (actionName: string, targetType: string, targetId?: string, details?: Record<string, unknown>) => {
       await supabase.from("admin_activity_logs").insert({
@@ -110,6 +79,36 @@ Deno.serve(async (req) => {
         details: details || {},
       });
     };
+
+    // CREATE ADMIN USER (requires existing admin)
+    if (action === "create-admin") {
+      const body = await req.json();
+      const { email, password } = body;
+      if (!email || !password) throw new Error("email and password required");
+
+      const { data: newUser, error: createError } = await supabase.auth.admin.createUser({
+        email,
+        password,
+        email_confirm: true,
+      });
+      if (createError) throw createError;
+
+      await supabase.from("user_roles").insert({
+        user_id: newUser.user.id,
+        role: "admin",
+      });
+
+      await supabase.from("profiles").insert({
+        user_id: newUser.user.id,
+        display_name: "Admin ChipTrip",
+      });
+
+      await logActivity("create_admin", "user", newUser.user.id, { email });
+
+      return new Response(JSON.stringify({ success: true, user_id: newUser.user.id }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
     // LIST USERS
     if (action === "list-users") {

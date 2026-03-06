@@ -36,6 +36,7 @@ const SavedPlans = () => {
     const { data, error } = await supabase
       .from("trips")
       .select("id, trip_data, created_at")
+      .eq("user_id", user!.id)
       .order("created_at", { ascending: false });
 
     if (!error && data) {
