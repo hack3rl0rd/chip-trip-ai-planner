@@ -111,10 +111,9 @@ const Planning = () => {
   };
 
   const canNext = () => {
-    if (step === 0) return destination.length > 0;
-    if (step === 1) return dates.start && dates.end;
-    if (step === 2) return styles.length > 0;
-    if (step === 3) return true;
+    if (step === 0) return destination.length > 0 && dates.start && dates.end;
+    if (step === 1) return styles.length > 0;
+    if (step === 2) return true;
     return true;
   };
 
@@ -151,20 +150,22 @@ const Planning = () => {
     : [];
 
   const steps = [
-    // Step 0: Destination
-    <motion.div key="step0" initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -30 }} className="flex flex-col items-center justify-center min-h-[60vh] gap-8">
+    // Step 0: Destination + Dates (merged, Futabus-style)
+    <motion.div key="step0" initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -30 }} className="flex flex-col items-center justify-center min-h-[60vh] gap-6">
       <div className="text-center space-y-3">
         <span className="text-5xl">🗺️</span>
-        <h2 className="text-3xl lg:text-4xl font-bold text-foreground">Bạn muốn khám phá nơi nào?</h2>
-        <p className="text-muted-foreground">Nhập tên thành phố hoặc chọn gợi ý bên dưới</p>
+        <h2 className="text-3xl lg:text-4xl font-bold text-foreground">Bạn muốn đi đâu?</h2>
+        <p className="text-muted-foreground">Chọn điểm đến, ngày đi và khung giờ</p>
       </div>
-      <div className="relative w-full max-w-lg">
+
+      {/* Destination input */}
+      <div className="relative w-full max-w-2xl">
         <Search className="absolute left-5 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
         <input
           value={destination}
           onChange={(e) => setDestination(e.target.value)}
           placeholder="VD: Đà Nẵng, Đà Lạt, Phú Quốc..."
-          className="w-full h-16 pl-14 pr-6 rounded-2xl border-2 border-border bg-card text-foreground text-lg font-medium placeholder:text-muted-foreground focus:outline-none focus:border-chip-orange focus:ring-4 focus:ring-chip-orange/10 transition-all"
+          className="w-full h-14 pl-14 pr-6 rounded-2xl border-2 border-border bg-card text-foreground text-lg font-medium placeholder:text-muted-foreground focus:outline-none focus:border-chip-orange focus:ring-4 focus:ring-chip-orange/10 transition-all"
         />
         {filteredSuggestions.length > 0 && (
           <div className="absolute top-full left-0 right-0 mt-2 bg-card border border-border rounded-xl shadow-warm overflow-hidden z-10">
@@ -177,8 +178,44 @@ const Planning = () => {
           </div>
         )}
       </div>
+
+      {/* Date + Time row (Futabus-style) */}
+      <div className="w-full max-w-2xl bg-card border-2 border-border rounded-2xl p-5 space-y-4">
+        <div className="flex flex-col sm:flex-row gap-4">
+          <div className="flex-1 space-y-2">
+            <label className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+              <CalendarDays className="w-4 h-4" /> Ngày đi
+            </label>
+            <input type="date" value={dates.start} onChange={(e) => setDates({ ...dates, start: e.target.value })} className="w-full h-12 px-4 rounded-xl border-2 border-border bg-background text-foreground font-medium focus:outline-none focus:border-chip-orange focus:ring-4 focus:ring-chip-orange/10 transition-all" />
+            <div className="flex gap-2">
+              {timeSlots.map(ts => (
+                <button key={ts.id} onClick={() => setDepartureTime(ts.id)} className={`flex-1 flex flex-col items-center gap-0.5 px-2 py-1.5 rounded-xl border-2 text-xs font-medium transition-all ${departureTime === ts.id ? "border-chip-orange bg-chip-orange/10 text-chip-orange" : "border-border bg-background text-muted-foreground hover:border-chip-orange/40"}`}>
+                  <span>{ts.emoji}</span>
+                  <span>{ts.label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="flex-1 space-y-2">
+            <label className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+              <CalendarDays className="w-4 h-4" /> Ngày về
+            </label>
+            <input type="date" value={dates.end} onChange={(e) => setDates({ ...dates, end: e.target.value })} className="w-full h-12 px-4 rounded-xl border-2 border-border bg-background text-foreground font-medium focus:outline-none focus:border-chip-orange focus:ring-4 focus:ring-chip-orange/10 transition-all" />
+            <div className="flex gap-2">
+              {timeSlots.map(ts => (
+                <button key={ts.id} onClick={() => setReturnTime(ts.id)} className={`flex-1 flex flex-col items-center gap-0.5 px-2 py-1.5 rounded-xl border-2 text-xs font-medium transition-all ${returnTime === ts.id ? "border-chip-orange bg-chip-orange/10 text-chip-orange" : "border-border bg-background text-muted-foreground hover:border-chip-orange/40"}`}>
+                  <span>{ts.emoji}</span>
+                  <span>{ts.label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Region suggestions (only when no destination) */}
       {!destination && (
-        <div className="w-full max-w-xl space-y-4">
+        <div className="w-full max-w-2xl space-y-3">
           {regions.map(region => (
             <div key={region.label}>
               <p className="text-xs font-semibold text-muted-foreground mb-2 flex items-center gap-1.5">
@@ -195,45 +232,6 @@ const Planning = () => {
           ))}
         </div>
       )}
-    </motion.div>,
-
-    // Step 1: Dates + Time Slots
-    <motion.div key="step1" initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -30 }} className="flex flex-col items-center justify-center min-h-[60vh] gap-6">
-      <div className="text-center space-y-3">
-        <span className="text-5xl">📅</span>
-        <h2 className="text-3xl lg:text-4xl font-bold text-foreground">Đi khi nào?</h2>
-        <p className="text-muted-foreground">Chọn ngày và khung giờ đi/về</p>
-      </div>
-      <div className="flex flex-col sm:flex-row gap-4 w-full max-w-lg">
-        <div className="flex-1 space-y-2">
-          <label className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-            <CalendarDays className="w-4 h-4" /> Ngày đi
-          </label>
-          <input type="date" value={dates.start} onChange={(e) => setDates({ ...dates, start: e.target.value })} className="w-full h-14 px-4 rounded-xl border-2 border-border bg-card text-foreground font-medium focus:outline-none focus:border-chip-orange focus:ring-4 focus:ring-chip-orange/10 transition-all" />
-          <div className="flex gap-2">
-            {timeSlots.map(ts => (
-              <button key={ts.id} onClick={() => setDepartureTime(ts.id)} className={`flex-1 flex flex-col items-center gap-0.5 px-2 py-2 rounded-xl border-2 text-xs font-medium transition-all ${departureTime === ts.id ? "border-chip-orange bg-chip-orange/10 text-chip-orange" : "border-border bg-card text-muted-foreground hover:border-chip-orange/40"}`}>
-                <span>{ts.emoji}</span>
-                <span>{ts.label}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-        <div className="flex-1 space-y-2">
-          <label className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-            <CalendarDays className="w-4 h-4" /> Ngày về
-          </label>
-          <input type="date" value={dates.end} onChange={(e) => setDates({ ...dates, end: e.target.value })} className="w-full h-14 px-4 rounded-xl border-2 border-border bg-card text-foreground font-medium focus:outline-none focus:border-chip-orange focus:ring-4 focus:ring-chip-orange/10 transition-all" />
-          <div className="flex gap-2">
-            {timeSlots.map(ts => (
-              <button key={ts.id} onClick={() => setReturnTime(ts.id)} className={`flex-1 flex flex-col items-center gap-0.5 px-2 py-2 rounded-xl border-2 text-xs font-medium transition-all ${returnTime === ts.id ? "border-chip-orange bg-chip-orange/10 text-chip-orange" : "border-border bg-card text-muted-foreground hover:border-chip-orange/40"}`}>
-                <span>{ts.emoji}</span>
-                <span>{ts.label}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
     </motion.div>,
 
     // Step 2: Travelers + Styles (merged)
@@ -326,10 +324,10 @@ const Planning = () => {
     <div className="min-h-screen bg-background">
       <Navbar />
       <div className="pt-20 pb-12 px-6">
-        {/* Progress bar - 4 steps */}
+        {/* Progress bar - 3 steps */}
         <div className="container mx-auto max-w-lg mb-8">
           <div className="flex gap-2">
-            {[0, 1, 2, 3].map((i) => (
+            {[0, 1, 2].map((i) => (
               <div key={i} className={`h-1.5 flex-1 rounded-full transition-all duration-500 ${i <= step ? "bg-chip-orange" : "bg-border"}`} />
             ))}
           </div>
@@ -355,7 +353,7 @@ const Planning = () => {
               <Button variant="ghost" onClick={() => setStep((s) => s - 1)} disabled={step === 0}>
                 <ArrowLeft className="w-4 h-4" /> Quay lại
               </Button>
-              {step < 3 ? (
+              {step < 2 ? (
                 <Button variant="hero" onClick={() => setStep((s) => s + 1)} disabled={!canNext()}>
                   Tiếp theo <ArrowRight className="w-4 h-4" />
                 </Button>
@@ -370,7 +368,7 @@ const Planning = () => {
       </div>
 
       {/* Mascot */}
-      {step === 3 && (
+      {step === 2 && (
         <ChipMascot
           storageKey="chip-planning-budget"
           messages={[
