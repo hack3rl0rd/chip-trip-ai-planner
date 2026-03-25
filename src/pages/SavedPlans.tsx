@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
-import { Calendar, Eye, Trash2, Plus, Pencil, Check, X, Loader2 } from "lucide-react";
+import { Calendar, Eye, Trash2, Plus, Pencil, Check, X, Loader2, Share2 } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import Navbar from "@/components/Navbar";
 import { type TripPlan } from "@/lib/trip-data";
@@ -73,6 +73,22 @@ const SavedPlans = () => {
       }
     }
     setEditingId(null);
+  };
+
+  const handleShareTrip = async (id: string, title: string) => {
+    const token = crypto.randomUUID().replace(/-/g, "").slice(0, 12);
+    const { data: existing } = await supabase.from("trips").select("share_token").eq("id", id).maybeSingle();
+    let shareToken = (existing as any)?.share_token;
+    if (!shareToken) {
+      const { error } = await supabase.from("trips").update({ share_token: token } as any).eq("id", id);
+      if (error) { toast.error("Không thể tạo link chia sẻ"); return; }
+      shareToken = token;
+    }
+    const shareUrl = `${window.location.origin}/result?shared=${shareToken}`;
+    try {
+      if (navigator.share) await navigator.share({ title, text: `Xem lịch trình ${title} trên Chip Trip! 🐥`, url: shareUrl });
+      else { await navigator.clipboard.writeText(shareUrl); toast.success("Đã sao chép link chia sẻ!"); }
+    } catch { /* cancelled */ }
   };
 
   const getImage = (trip: TripPlan) => {
@@ -148,6 +164,9 @@ const SavedPlans = () => {
                       <div className="flex gap-2">
                         <Button variant="soft" size="sm" className="flex-1" onClick={() => navigate(`/result?id=${id}`, { state: { trip } })}>
                           <Eye className="w-3.5 h-3.5" /> Xem lại
+                        </Button>
+                        <Button variant="outline" size="sm" onClick={() => handleShareTrip(id, trip.title)} title="Chia sẻ">
+                          <Share2 className="w-3.5 h-3.5" />
                         </Button>
                         <AlertDialog>
                           <AlertDialogTrigger asChild>

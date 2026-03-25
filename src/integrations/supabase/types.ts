@@ -287,6 +287,7 @@ export type Database = {
           destination: string
           end_date: string | null
           id: string
+          share_token: string | null
           start_date: string | null
           styles: string[] | null
           travelers: number | null
@@ -300,6 +301,7 @@ export type Database = {
           destination: string
           end_date?: string | null
           id?: string
+          share_token?: string | null
           start_date?: string | null
           styles?: string[] | null
           travelers?: number | null
@@ -313,6 +315,7 @@ export type Database = {
           destination?: string
           end_date?: string | null
           id?: string
+          share_token?: string | null
           start_date?: string | null
           styles?: string[] | null
           travelers?: number | null

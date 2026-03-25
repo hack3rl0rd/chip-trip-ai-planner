@@ -42,6 +42,7 @@ const Result = () => {
   const [activeDay, setActiveDay] = useState(0);
   const dayTabsRef = useRef<HTMLDivElement>(null);
   const dayButtonRefs = useRef<(HTMLButtonElement | null)[]>([]);
+  const [isSharedView, setIsSharedView] = useState(false);
 
   const handleDayClick = useCallback((dayIdx: number) => {
     setActiveDay(dayIdx);
@@ -85,8 +86,25 @@ const Result = () => {
   };
 
   useEffect(() => {
-    const tripId = searchParams.get("id") || searchParams.get("shared");
-    if (tripId) {
+    const tripId = searchParams.get("id");
+    const shareToken = searchParams.get("shared");
+    
+    if (shareToken) {
+      // Shared view - load by share_token
+      setLoadingTrip(true);
+      setIsSharedView(true);
+      supabase.from("trips").select("id, trip_data").eq("share_token", shareToken).maybeSingle().then(({ data }) => {
+        if (data?.trip_data) {
+          setTrip(data.trip_data as unknown as TripPlan);
+          setDbTripId(data.id);
+          setSaved(true);
+        } else {
+          toast.error("Link chia sẻ không hợp lệ hoặc đã hết hạn");
+          navigate("/");
+        }
+        setLoadingTrip(false);
+      });
+    } else if (tripId) {
       setLoadingTrip(true);
       setDbTripId(tripId);
       supabase.from("trips").select("id, trip_data").eq("id", tripId).maybeSingle().then(({ data }) => {
@@ -139,11 +157,23 @@ const Result = () => {
 
   const handleShare = async () => {
     if (!dbTripId) { toast.error("Vui lòng lưu lịch trình trước khi chia sẻ"); return; }
-    const shareUrl = `${window.location.origin}/result?id=${dbTripId}`;
+    
+    // Generate share token if not exists
+    const token = crypto.randomUUID().replace(/-/g, "").slice(0, 12);
+    const { data: existing } = await supabase.from("trips").select("share_token").eq("id", dbTripId).maybeSingle();
+    
+    let shareToken = (existing as any)?.share_token;
+    if (!shareToken) {
+      const { error } = await supabase.from("trips").update({ share_token: token } as any).eq("id", dbTripId);
+      if (error) { toast.error("Không thể tạo link chia sẻ"); return; }
+      shareToken = token;
+    }
+    
+    const shareUrl = `${window.location.origin}/result?shared=${shareToken}`;
     const shareData = { title: trip!.title, text: `Xem lịch trình ${trip!.title} trên Chip Trip! 🐥`, url: shareUrl };
     try {
       if (navigator.share) await navigator.share(shareData);
-      else { await navigator.clipboard.writeText(`${shareData.text}\n${shareData.url}`); toast.success("Đã sao chép link!"); }
+      else { await navigator.clipboard.writeText(`${shareData.text}\n${shareData.url}`); toast.success("Đã sao chép link chia sẻ!"); }
     } catch { /* cancelled */ }
   };
 
@@ -222,6 +252,20 @@ const Result = () => {
     <div className="min-h-screen bg-background pb-24">
       <Navbar />
       <div className="pt-20 pb-12">
+        {isSharedView && (
+          <div className="container mx-auto px-6 mb-4">
+            <div className="rounded-2xl bg-chip-yellow-light border border-chip-yellow/30 px-5 py-3 flex items-center gap-3">
+              <span className="text-lg">👀</span>
+              <div className="flex-1">
+                <p className="font-semibold text-foreground text-sm">Bạn đang xem lịch trình được chia sẻ</p>
+                <p className="text-xs text-muted-foreground">Lịch trình này ở chế độ chỉ xem</p>
+              </div>
+              <Button variant="hero" size="sm" onClick={() => handleClone()}>
+                <Copy className="w-3.5 h-3.5" /> Clone về tài khoản
+              </Button>
+            </div>
+          </div>
+        )}
         <div className="container mx-auto px-6">
           <div className="grid lg:grid-cols-5 gap-8">
             {/* Left - Map */}
@@ -307,14 +351,16 @@ const Result = () => {
                     </div>
                   </div>
                   {/* Minimal header actions - main actions in floating bar */}
-                  <div className="flex gap-2 flex-wrap">
-                    {dbTripId && <GroupPanel tripId={dbTripId} isOwner={true} />}
-                    {dbTripId && <SplitBill tripId={dbTripId} memberNames={user ? { [user.id]: profile?.display_name || user.email?.split("@")[0] || "Bạn" } : {}} travelerCount={trip?.days?.[0]?.items ? undefined : 2} />}
-                    <Button variant={editMode ? "hero" : "soft"} size="sm" onClick={() => setEditMode(!editMode)}>
-                      {editMode ? <Check className="w-4 h-4" /> : <GripVertical className="w-4 h-4" />}
-                      {editMode ? "Xong" : "Sửa"}
-                    </Button>
-                  </div>
+                  {!isSharedView && (
+                    <div className="flex gap-2 flex-wrap">
+                      {dbTripId && <GroupPanel tripId={dbTripId} isOwner={true} />}
+                      {dbTripId && <SplitBill tripId={dbTripId} memberNames={user ? { [user.id]: profile?.display_name || user.email?.split("@")[0] || "Bạn" } : {}} travelerCount={trip?.days?.[0]?.items ? undefined : 2} />}
+                      <Button variant={editMode ? "hero" : "soft"} size="sm" onClick={() => setEditMode(!editMode)}>
+                        {editMode ? <Check className="w-4 h-4" /> : <GripVertical className="w-4 h-4" />}
+                        {editMode ? "Xong" : "Sửa"}
+                      </Button>
+                    </div>
+                  )}
                 </div>
               </motion.div>
 
@@ -441,24 +487,34 @@ const Result = () => {
       {/* Floating Action Bar */}
       <div className="fixed bottom-0 left-0 right-0 z-40 bg-card/80 backdrop-blur-lg border-t border-border">
         <div className="container mx-auto px-6 py-3 flex items-center justify-center gap-3">
-          <Button variant={saved ? "soft" : "hero"} size="sm" onClick={handleSave} disabled={saved} className="gap-1.5">
-            {saved ? <Check className="w-4 h-4" /> : <Bookmark className="w-4 h-4" />}
-            {saved ? "Đã lưu" : "Lưu"}
-          </Button>
-          {dbTripId && (
-            <SplitBill tripId={dbTripId} memberNames={user ? { [user.id]: profile?.display_name || user.email?.split("@")[0] || "Bạn" } : {}} />
+          {isSharedView ? (
+            <>
+              <Button variant="hero" size="sm" onClick={handleClone} className="gap-1.5">
+                <Copy className="w-4 h-4" /> Clone về tài khoản
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button variant={saved ? "soft" : "hero"} size="sm" onClick={handleSave} disabled={saved} className="gap-1.5">
+                {saved ? <Check className="w-4 h-4" /> : <Bookmark className="w-4 h-4" />}
+                {saved ? "Đã lưu" : "Lưu"}
+              </Button>
+              {dbTripId && (
+                <SplitBill tripId={dbTripId} memberNames={user ? { [user.id]: profile?.display_name || user.email?.split("@")[0] || "Bạn" } : {}} />
+              )}
+              <Button variant="soft" size="sm" onClick={handleShare} className="gap-1.5">
+                <Share2 className="w-4 h-4" /> Chia sẻ
+              </Button>
+              <ExportDialog trip={trip} dbTripId={dbTripId}>
+                <Button variant="soft" size="sm" className="gap-1.5">
+                  <Download className="w-4 h-4" /> Xuất
+                </Button>
+              </ExportDialog>
+              <Button variant="soft" size="sm" onClick={handleClone} className="gap-1.5">
+                <Copy className="w-4 h-4" /> Clone
+              </Button>
+            </>
           )}
-          <Button variant="soft" size="sm" onClick={handleShare} className="gap-1.5">
-            <Share2 className="w-4 h-4" /> Chia sẻ
-          </Button>
-          <ExportDialog trip={trip} dbTripId={dbTripId}>
-            <Button variant="soft" size="sm" className="gap-1.5">
-              <Download className="w-4 h-4" /> Xuất
-            </Button>
-          </ExportDialog>
-          <Button variant="soft" size="sm" onClick={handleClone} className="gap-1.5">
-            <Copy className="w-4 h-4" /> Clone
-          </Button>
         </div>
       </div>
 
