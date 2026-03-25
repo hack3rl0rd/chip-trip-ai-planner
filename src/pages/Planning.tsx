@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
-import { Search, CalendarDays, ArrowRight, ArrowLeft, Sparkles, Loader2, Check } from "lucide-react";
+import { Search, CalendarDays, ArrowRight, ArrowLeft, Sparkles, Loader2, Check, ArrowLeftRight, MapPin } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
@@ -49,7 +49,9 @@ const Planning = () => {
   }, [user, authLoading, navigate]);
 
   const [step, setStep] = useState(0);
+  const [origin, setOrigin] = useState("");
   const [destination, setDestination] = useState("");
+  const [tripType, setTripType] = useState<"roundtrip" | "oneway">("roundtrip");
   const [dates, setDates] = useState({ start: "", end: "" });
   const [departureTime, setDepartureTime] = useState("morning");
   const [returnTime, setReturnTime] = useState("afternoon");
@@ -57,6 +59,9 @@ const Planning = () => {
   const [budgetInput, setBudgetInput] = useState("");
   const [styles, setStyles] = useState<string[]>([]);
   const [travelers, setTravelers] = useState(2);
+  const [tickets, setTickets] = useState(1);
+  const [originFocused, setOriginFocused] = useState(false);
+  const [destFocused, setDestFocused] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
   const toggleStyle = (id: string) => {
@@ -81,14 +86,17 @@ const Planning = () => {
     try {
       const { data, error } = await supabase.functions.invoke("generate-trip", {
         body: {
+          origin,
           destination,
+          tripType,
           startDate: dates.start,
-          endDate: dates.end,
+          endDate: tripType === "roundtrip" ? dates.end : dates.start,
           departureTime,
-          returnTime,
+          returnTime: tripType === "roundtrip" ? returnTime : undefined,
           budget: budget[0],
           styles,
           travelers,
+          tickets,
         },
       });
 
@@ -111,7 +119,11 @@ const Planning = () => {
   };
 
   const canNext = () => {
-    if (step === 0) return destination.length > 0 && dates.start && dates.end;
+    if (step === 0) {
+      const hasBasic = origin.length > 0 && destination.length > 0 && dates.start;
+      if (tripType === "roundtrip") return hasBasic && dates.end;
+      return hasBasic;
+    }
     if (step === 1) return styles.length > 0;
     if (step === 2) return true;
     return true;
@@ -145,76 +157,138 @@ const Planning = () => {
   ];
 
   const allPlaces = regions.flatMap(r => r.places);
-  const filteredSuggestions = destination.length > 0
+  const filteredOriginSuggestions = originFocused && origin.length > 0
+    ? allPlaces.filter(p => p.name.toLowerCase().includes(origin.toLowerCase()) && p.name.toLowerCase() !== origin.toLowerCase())
+    : [];
+  const filteredDestSuggestions = destFocused && destination.length > 0
     ? allPlaces.filter(p => p.name.toLowerCase().includes(destination.toLowerCase()) && p.name.toLowerCase() !== destination.toLowerCase())
     : [];
 
+  const swapOriginDest = () => {
+    const tmp = origin;
+    setOrigin(destination);
+    setDestination(tmp);
+  };
+
   const steps = [
-    // Step 0: Destination + Dates (merged, Futabus-style)
+    // Step 0: Futabus-style booking form
     <motion.div key="step0" initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -30 }} className="flex flex-col items-center justify-center min-h-[60vh] gap-6">
       <div className="text-center space-y-3">
         <span className="text-5xl">🗺️</span>
-        <h2 className="text-3xl lg:text-4xl font-bold text-foreground">Bạn muốn đi đâu?</h2>
-        <p className="text-muted-foreground">Chọn điểm đến, ngày đi và khung giờ</p>
+        <h2 className="text-3xl lg:text-4xl font-bold text-foreground">Lên kế hoạch chuyến đi</h2>
+        <p className="text-muted-foreground">Điền thông tin để AI tạo lịch trình cho bạn</p>
       </div>
 
-      {/* Destination input */}
-      <div className="relative w-full max-w-2xl">
-        <Search className="absolute left-5 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-        <input
-          value={destination}
-          onChange={(e) => setDestination(e.target.value)}
-          placeholder="VD: Đà Nẵng, Đà Lạt, Phú Quốc..."
-          className="w-full h-14 pl-14 pr-6 rounded-2xl border-2 border-border bg-card text-foreground text-lg font-medium placeholder:text-muted-foreground focus:outline-none focus:border-chip-orange focus:ring-4 focus:ring-chip-orange/10 transition-all"
-        />
-        {filteredSuggestions.length > 0 && (
-          <div className="absolute top-full left-0 right-0 mt-2 bg-card border border-border rounded-xl shadow-warm overflow-hidden z-10">
-            {filteredSuggestions.map(s => (
-              <button key={s.name} onClick={() => setDestination(s.name)} className="w-full flex items-center gap-3 px-5 py-3 hover:bg-muted/50 transition-colors text-left">
-                <span>{s.emoji}</span>
-                <span className="font-medium text-foreground">{s.name}</span>
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* Date + Time row (Futabus-style) */}
       <div className="w-full max-w-2xl bg-card border-2 border-border rounded-2xl p-5 space-y-4">
-        <div className="flex flex-col sm:flex-row gap-4">
+        {/* Trip type toggle */}
+        <div className="flex items-center gap-4">
+          <button onClick={() => setTripType("oneway")} className={`flex items-center gap-2 px-4 py-2 rounded-xl border-2 text-sm font-medium transition-all ${tripType === "oneway" ? "border-chip-orange bg-chip-orange/10 text-chip-orange" : "border-border text-muted-foreground hover:border-chip-orange/40"}`}>
+            <ArrowRight className="w-4 h-4" /> Một chiều
+          </button>
+          <button onClick={() => setTripType("roundtrip")} className={`flex items-center gap-2 px-4 py-2 rounded-xl border-2 text-sm font-medium transition-all ${tripType === "roundtrip" ? "border-chip-orange bg-chip-orange/10 text-chip-orange" : "border-border text-muted-foreground hover:border-chip-orange/40"}`}>
+            <ArrowLeftRight className="w-4 h-4" /> Khứ hồi
+          </button>
+        </div>
+
+        {/* Origin + Destination */}
+        <div className="flex flex-col sm:flex-row items-center gap-3">
+          <div className="relative flex-1 w-full">
+            <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-chip-orange" />
+            <input
+              value={origin}
+              onChange={(e) => setOrigin(e.target.value)}
+              onFocus={() => setOriginFocused(true)}
+              onBlur={() => setTimeout(() => setOriginFocused(false), 200)}
+              placeholder="Điểm đi"
+              className="w-full h-12 pl-11 pr-4 rounded-xl border-2 border-border bg-background text-foreground font-medium placeholder:text-muted-foreground focus:outline-none focus:border-chip-orange focus:ring-4 focus:ring-chip-orange/10 transition-all"
+            />
+            {filteredOriginSuggestions.length > 0 && (
+              <div className="absolute top-full left-0 right-0 mt-1 bg-card border border-border rounded-xl shadow-warm overflow-hidden z-20">
+                {filteredOriginSuggestions.slice(0, 5).map(s => (
+                  <button key={s.name} onClick={() => { setOrigin(s.name); setOriginFocused(false); }} className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-muted/50 transition-colors text-left text-sm">
+                    <span>{s.emoji}</span>
+                    <span className="font-medium text-foreground">{s.name}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <button onClick={swapOriginDest} className="w-10 h-10 rounded-full border-2 border-border bg-background flex items-center justify-center text-chip-orange hover:border-chip-orange hover:bg-chip-orange/10 transition-all shrink-0">
+            <ArrowLeftRight className="w-4 h-4" />
+          </button>
+
+          <div className="relative flex-1 w-full">
+            <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-primary" />
+            <input
+              value={destination}
+              onChange={(e) => setDestination(e.target.value)}
+              onFocus={() => setDestFocused(true)}
+              onBlur={() => setTimeout(() => setDestFocused(false), 200)}
+              placeholder="Điểm đến"
+              className="w-full h-12 pl-11 pr-4 rounded-xl border-2 border-border bg-background text-foreground font-medium placeholder:text-muted-foreground focus:outline-none focus:border-chip-orange focus:ring-4 focus:ring-chip-orange/10 transition-all"
+            />
+            {filteredDestSuggestions.length > 0 && (
+              <div className="absolute top-full left-0 right-0 mt-1 bg-card border border-border rounded-xl shadow-warm overflow-hidden z-20">
+                {filteredDestSuggestions.slice(0, 5).map(s => (
+                  <button key={s.name} onClick={() => { setDestination(s.name); setDestFocused(false); }} className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-muted/50 transition-colors text-left text-sm">
+                    <span>{s.emoji}</span>
+                    <span className="font-medium text-foreground">{s.name}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Dates + Tickets row */}
+        <div className="flex flex-col sm:flex-row gap-3">
           <div className="flex-1 space-y-2">
-            <label className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-              <CalendarDays className="w-4 h-4" /> Ngày đi
+            <label className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
+              <CalendarDays className="w-3.5 h-3.5" /> Ngày đi
             </label>
             <input type="date" value={dates.start} onChange={(e) => setDates({ ...dates, start: e.target.value })} className="w-full h-12 px-4 rounded-xl border-2 border-border bg-background text-foreground font-medium focus:outline-none focus:border-chip-orange focus:ring-4 focus:ring-chip-orange/10 transition-all" />
-            <div className="flex gap-2">
+            <div className="flex gap-1.5">
               {timeSlots.map(ts => (
-                <button key={ts.id} onClick={() => setDepartureTime(ts.id)} className={`flex-1 flex flex-col items-center gap-0.5 px-2 py-1.5 rounded-xl border-2 text-xs font-medium transition-all ${departureTime === ts.id ? "border-chip-orange bg-chip-orange/10 text-chip-orange" : "border-border bg-background text-muted-foreground hover:border-chip-orange/40"}`}>
-                  <span>{ts.emoji}</span>
+                <button key={ts.id} onClick={() => setDepartureTime(ts.id)} className={`flex-1 flex flex-col items-center gap-0.5 px-1 py-1.5 rounded-lg border-2 text-[10px] font-medium transition-all ${departureTime === ts.id ? "border-chip-orange bg-chip-orange/10 text-chip-orange" : "border-border bg-background text-muted-foreground hover:border-chip-orange/40"}`}>
+                  <span className="text-sm">{ts.emoji}</span>
                   <span>{ts.label}</span>
                 </button>
               ))}
             </div>
           </div>
-          <div className="flex-1 space-y-2">
-            <label className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-              <CalendarDays className="w-4 h-4" /> Ngày về
-            </label>
-            <input type="date" value={dates.end} onChange={(e) => setDates({ ...dates, end: e.target.value })} className="w-full h-12 px-4 rounded-xl border-2 border-border bg-background text-foreground font-medium focus:outline-none focus:border-chip-orange focus:ring-4 focus:ring-chip-orange/10 transition-all" />
-            <div className="flex gap-2">
-              {timeSlots.map(ts => (
-                <button key={ts.id} onClick={() => setReturnTime(ts.id)} className={`flex-1 flex flex-col items-center gap-0.5 px-2 py-1.5 rounded-xl border-2 text-xs font-medium transition-all ${returnTime === ts.id ? "border-chip-orange bg-chip-orange/10 text-chip-orange" : "border-border bg-background text-muted-foreground hover:border-chip-orange/40"}`}>
-                  <span>{ts.emoji}</span>
-                  <span>{ts.label}</span>
-                </button>
-              ))}
+
+          {tripType === "roundtrip" && (
+            <div className="flex-1 space-y-2">
+              <label className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
+                <CalendarDays className="w-3.5 h-3.5" /> Ngày về
+              </label>
+              <input type="date" value={dates.end} onChange={(e) => setDates({ ...dates, end: e.target.value })} className="w-full h-12 px-4 rounded-xl border-2 border-border bg-background text-foreground font-medium focus:outline-none focus:border-chip-orange focus:ring-4 focus:ring-chip-orange/10 transition-all" />
+              <div className="flex gap-1.5">
+                {timeSlots.map(ts => (
+                  <button key={ts.id} onClick={() => setReturnTime(ts.id)} className={`flex-1 flex flex-col items-center gap-0.5 px-1 py-1.5 rounded-lg border-2 text-[10px] font-medium transition-all ${returnTime === ts.id ? "border-chip-orange bg-chip-orange/10 text-chip-orange" : "border-border bg-background text-muted-foreground hover:border-chip-orange/40"}`}>
+                    <span className="text-sm">{ts.emoji}</span>
+                    <span>{ts.label}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Tickets */}
+          <div className="w-full sm:w-28 space-y-2">
+            <label className="text-xs font-medium text-muted-foreground">Số vé</label>
+            <div className="flex items-center h-12 rounded-xl border-2 border-border bg-background overflow-hidden">
+              <button onClick={() => setTickets(Math.max(1, tickets - 1))} className="w-10 h-full flex items-center justify-center text-muted-foreground hover:bg-muted/50 transition-colors text-lg font-bold">−</button>
+              <span className="flex-1 text-center font-bold text-foreground">{tickets}</span>
+              <button onClick={() => setTickets(Math.min(20, tickets + 1))} className="w-10 h-full flex items-center justify-center text-muted-foreground hover:bg-muted/50 transition-colors text-lg font-bold">+</button>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Region suggestions (only when no destination) */}
-      {!destination && (
+      {/* Region suggestions */}
+      {!destination && !origin && (
         <div className="w-full max-w-2xl space-y-3">
           {regions.map(region => (
             <div key={region.label}>
