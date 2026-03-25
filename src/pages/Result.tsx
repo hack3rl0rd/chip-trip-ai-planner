@@ -40,6 +40,16 @@ const Result = () => {
   const [allExpanded, setAllExpanded] = useState(false);
   const [completedItems, setCompletedItems] = useState<Set<string>>(new Set());
   const [activeDay, setActiveDay] = useState(0);
+  const dayTabsRef = useRef<HTMLDivElement>(null);
+  const dayButtonRefs = useRef<(HTMLButtonElement | null)[]>([]);
+
+  const handleDayClick = useCallback((dayIdx: number) => {
+    setActiveDay(dayIdx);
+    const btn = dayButtonRefs.current[dayIdx];
+    if (btn) {
+      btn.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
+    }
+  }, []);
 
   // Initialize expanded days - first 3 open by default
   useEffect(() => {
