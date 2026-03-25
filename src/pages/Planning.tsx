@@ -88,9 +88,9 @@ const Planning = () => {
   const [branch, setBranch] = useState<Branch>(null);
 
   // Known destination flow state
+  const [knownStep, setKnownStep] = useState(0); // 0: info, 1: styles, 2: budget
   const [origin, setOrigin] = useState("");
   const [destination, setDestination] = useState("");
-  const [tripType, setTripType] = useState<"roundtrip" | "oneway">("roundtrip");
   const [dates, setDates] = useState({ start: "", end: "" });
   const [departureTime, setDepartureTime] = useState("morning");
   const [returnTime, setReturnTime] = useState("afternoon");
@@ -98,7 +98,6 @@ const Planning = () => {
   const [budgetInput, setBudgetInput] = useState("");
   const [styles, setStyles] = useState<string[]>([]);
   const [travelers, setTravelers] = useState(2);
-  const [tickets, setTickets] = useState(1);
   const [originFocused, setOriginFocused] = useState(false);
   const [destFocused, setDestFocused] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -183,15 +182,15 @@ const Planning = () => {
         body: {
           origin,
           destination,
-          tripType,
+          tripType: "roundtrip",
           startDate: dates.start,
-          endDate: tripType === "roundtrip" ? dates.end : dates.start,
+          endDate: dates.end,
           departureTime,
-          returnTime: tripType === "roundtrip" ? returnTime : undefined,
+          returnTime,
           budget: budget[0],
           styles,
           travelers,
-          tickets,
+          tickets: travelers,
         },
       });
 
@@ -213,8 +212,10 @@ const Planning = () => {
     }
   };
 
-  const canGenerate = () => {
-    return destination.length > 0 && dates.start && styles.length > 0;
+  const canNextKnown = () => {
+    if (knownStep === 0) return origin.length > 0 && destination.length > 0 && dates.start && dates.end;
+    if (knownStep === 1) return styles.length > 0;
+    return true;
   };
 
   // ==================== RENDER ====================
@@ -250,173 +251,120 @@ const Planning = () => {
     </motion.div>
   );
 
-  // "Known destination" all-in-one form + style selection
-  const renderKnownFlow = () => (
-    <motion.div key="known" initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -30 }} className="flex flex-col items-center gap-6">
-      <div className="text-center space-y-2">
-        <h2 className="text-2xl lg:text-3xl font-bold text-foreground">🗺️ Lên kế hoạch chuyến đi</h2>
-        <p className="text-muted-foreground text-sm">Điền thông tin & chọn gu du lịch để AI tạo lịch trình</p>
-      </div>
-
-      {/* All-in-one booking card */}
-      <div className="w-full max-w-2xl bg-card border-2 border-border rounded-2xl p-5 space-y-4">
-        {/* Trip type toggle */}
-        <div className="flex items-center gap-3">
-          <button onClick={() => setTripType("oneway")} className={`flex items-center gap-2 px-4 py-2 rounded-xl border-2 text-sm font-medium transition-all ${tripType === "oneway" ? "border-chip-orange bg-chip-orange/10 text-chip-orange" : "border-border text-muted-foreground hover:border-chip-orange/40"}`}>
-            <ArrowRight className="w-4 h-4" /> Một chiều
-          </button>
-          <button onClick={() => setTripType("roundtrip")} className={`flex items-center gap-2 px-4 py-2 rounded-xl border-2 text-sm font-medium transition-all ${tripType === "roundtrip" ? "border-chip-orange bg-chip-orange/10 text-chip-orange" : "border-border text-muted-foreground hover:border-chip-orange/40"}`}>
-            <ArrowLeftRight className="w-4 h-4" /> Khứ hồi
-          </button>
+  // "Known destination" multi-step flow
+  const renderKnownFlow = () => {
+    // Step 0: Booking info
+    if (knownStep === 0) return (
+      <motion.div key="known-0" initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -30 }} className="flex flex-col items-center gap-6">
+        <div className="text-center space-y-2">
+          <h2 className="text-2xl lg:text-3xl font-bold text-foreground">🗺️ Lên kế hoạch chuyến đi</h2>
+          <p className="text-muted-foreground text-sm">Điền thông tin chuyến đi của bạn</p>
         </div>
 
-        {/* Origin + Destination */}
-        <div className="flex flex-col sm:flex-row items-center gap-3">
-          <div className="relative flex-1 w-full">
-            <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-chip-orange" />
-            <input
-              value={origin}
-              onChange={(e) => setOrigin(e.target.value)}
-              onFocus={() => setOriginFocused(true)}
-              onBlur={() => setTimeout(() => setOriginFocused(false), 200)}
-              placeholder="Điểm đi"
-              className="w-full h-12 pl-11 pr-4 rounded-xl border-2 border-border bg-background text-foreground font-medium placeholder:text-muted-foreground focus:outline-none focus:border-chip-orange focus:ring-4 focus:ring-chip-orange/10 transition-all"
-            />
-            {filteredOriginSuggestions.length > 0 && (
-              <div className="absolute top-full left-0 right-0 mt-1 bg-card border border-border rounded-xl shadow-warm overflow-hidden z-20">
-                {filteredOriginSuggestions.slice(0, 5).map(s => (
-                  <button key={s.name} onClick={() => { setOrigin(s.name); setOriginFocused(false); }} className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-muted/50 transition-colors text-left text-sm">
-                    <span>{s.emoji}</span>
-                    <span className="font-medium text-foreground">{s.name}</span>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-
-          <button onClick={swapOriginDest} className="w-10 h-10 rounded-full border-2 border-border bg-background flex items-center justify-center text-chip-orange hover:border-chip-orange hover:bg-chip-orange/10 transition-all shrink-0">
-            <ArrowLeftRight className="w-4 h-4" />
-          </button>
-
-          <div className="relative flex-1 w-full">
-            <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-primary" />
-            <input
-              value={destination}
-              onChange={(e) => setDestination(e.target.value)}
-              onFocus={() => setDestFocused(true)}
-              onBlur={() => setTimeout(() => setDestFocused(false), 200)}
-              placeholder="Điểm đến"
-              className="w-full h-12 pl-11 pr-4 rounded-xl border-2 border-border bg-background text-foreground font-medium placeholder:text-muted-foreground focus:outline-none focus:border-chip-orange focus:ring-4 focus:ring-chip-orange/10 transition-all"
-            />
-            {filteredDestSuggestions.length > 0 && (
-              <div className="absolute top-full left-0 right-0 mt-1 bg-card border border-border rounded-xl shadow-warm overflow-hidden z-20">
-                {filteredDestSuggestions.slice(0, 5).map(s => (
-                  <button key={s.name} onClick={() => { setDestination(s.name); setDestFocused(false); }} className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-muted/50 transition-colors text-left text-sm">
-                    <span>{s.emoji}</span>
-                    <span className="font-medium text-foreground">{s.name}</span>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Dates + Travelers + Budget row */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <div className="space-y-2">
-            <label className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
-              <CalendarDays className="w-3.5 h-3.5" /> Ngày đi
-            </label>
-            <input type="date" value={dates.start} onChange={(e) => setDates({ ...dates, start: e.target.value })} className="w-full h-11 px-4 rounded-xl border-2 border-border bg-background text-foreground font-medium focus:outline-none focus:border-chip-orange focus:ring-4 focus:ring-chip-orange/10 transition-all" />
-            <div className="flex gap-1.5">
-              {timeSlots.map(ts => (
-                <button key={ts.id} onClick={() => setDepartureTime(ts.id)} className={`flex-1 flex flex-col items-center gap-0.5 px-1 py-1.5 rounded-lg border-2 text-[10px] font-medium transition-all ${departureTime === ts.id ? "border-chip-orange bg-chip-orange/10 text-chip-orange" : "border-border bg-background text-muted-foreground hover:border-chip-orange/40"}`}>
-                  <span className="text-sm">{ts.emoji}</span>
-                  <span>{ts.label}</span>
-                </button>
-              ))}
+        <div className="w-full max-w-2xl bg-card border-2 border-border rounded-2xl p-5 space-y-4">
+          {/* Origin + Destination */}
+          <div className="flex flex-col sm:flex-row items-center gap-3">
+            <div className="relative flex-1 w-full">
+              <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-chip-orange" />
+              <input value={origin} onChange={(e) => setOrigin(e.target.value)} onFocus={() => setOriginFocused(true)} onBlur={() => setTimeout(() => setOriginFocused(false), 200)} placeholder="Điểm đi" className="w-full h-12 pl-11 pr-4 rounded-xl border-2 border-border bg-background text-foreground font-medium placeholder:text-muted-foreground focus:outline-none focus:border-chip-orange focus:ring-4 focus:ring-chip-orange/10 transition-all" />
+              {filteredOriginSuggestions.length > 0 && (
+                <div className="absolute top-full left-0 right-0 mt-1 bg-card border border-border rounded-xl shadow-warm overflow-hidden z-20">
+                  {filteredOriginSuggestions.slice(0, 5).map(s => (
+                    <button key={s.name} onClick={() => { setOrigin(s.name); setOriginFocused(false); }} className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-muted/50 transition-colors text-left text-sm">
+                      <span>{s.emoji}</span><span className="font-medium text-foreground">{s.name}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+            <button onClick={swapOriginDest} className="w-10 h-10 rounded-full border-2 border-border bg-background flex items-center justify-center text-chip-orange hover:border-chip-orange hover:bg-chip-orange/10 transition-all shrink-0">
+              <ArrowLeftRight className="w-4 h-4" />
+            </button>
+            <div className="relative flex-1 w-full">
+              <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-primary" />
+              <input value={destination} onChange={(e) => setDestination(e.target.value)} onFocus={() => setDestFocused(true)} onBlur={() => setTimeout(() => setDestFocused(false), 200)} placeholder="Điểm đến" className="w-full h-12 pl-11 pr-4 rounded-xl border-2 border-border bg-background text-foreground font-medium placeholder:text-muted-foreground focus:outline-none focus:border-chip-orange focus:ring-4 focus:ring-chip-orange/10 transition-all" />
+              {filteredDestSuggestions.length > 0 && (
+                <div className="absolute top-full left-0 right-0 mt-1 bg-card border border-border rounded-xl shadow-warm overflow-hidden z-20">
+                  {filteredDestSuggestions.slice(0, 5).map(s => (
+                    <button key={s.name} onClick={() => { setDestination(s.name); setDestFocused(false); }} className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-muted/50 transition-colors text-left text-sm">
+                      <span>{s.emoji}</span><span className="font-medium text-foreground">{s.name}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
 
-          {tripType === "roundtrip" && (
+          {/* Dates */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="space-y-2">
-              <label className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
-                <CalendarDays className="w-3.5 h-3.5" /> Ngày về
-              </label>
+              <label className="text-xs font-medium text-muted-foreground flex items-center gap-1.5"><CalendarDays className="w-3.5 h-3.5" /> Ngày đi</label>
+              <input type="date" value={dates.start} onChange={(e) => setDates({ ...dates, start: e.target.value })} className="w-full h-11 px-4 rounded-xl border-2 border-border bg-background text-foreground font-medium focus:outline-none focus:border-chip-orange focus:ring-4 focus:ring-chip-orange/10 transition-all" />
+              <div className="flex gap-1.5">
+                {timeSlots.map(ts => (
+                  <button key={ts.id} onClick={() => setDepartureTime(ts.id)} className={`flex-1 flex flex-col items-center gap-0.5 px-1 py-1.5 rounded-lg border-2 text-[10px] font-medium transition-all ${departureTime === ts.id ? "border-chip-orange bg-chip-orange/10 text-chip-orange" : "border-border bg-background text-muted-foreground hover:border-chip-orange/40"}`}>
+                    <span className="text-sm">{ts.emoji}</span><span>{ts.label}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="space-y-2">
+              <label className="text-xs font-medium text-muted-foreground flex items-center gap-1.5"><CalendarDays className="w-3.5 h-3.5" /> Ngày về</label>
               <input type="date" value={dates.end} onChange={(e) => setDates({ ...dates, end: e.target.value })} className="w-full h-11 px-4 rounded-xl border-2 border-border bg-background text-foreground font-medium focus:outline-none focus:border-chip-orange focus:ring-4 focus:ring-chip-orange/10 transition-all" />
               <div className="flex gap-1.5">
                 {timeSlots.map(ts => (
                   <button key={ts.id} onClick={() => setReturnTime(ts.id)} className={`flex-1 flex flex-col items-center gap-0.5 px-1 py-1.5 rounded-lg border-2 text-[10px] font-medium transition-all ${returnTime === ts.id ? "border-chip-orange bg-chip-orange/10 text-chip-orange" : "border-border bg-background text-muted-foreground hover:border-chip-orange/40"}`}>
-                    <span className="text-sm">{ts.emoji}</span>
-                    <span>{ts.label}</span>
+                    <span className="text-sm">{ts.emoji}</span><span>{ts.label}</span>
                   </button>
                 ))}
               </div>
             </div>
-          )}
+          </div>
+
+          {/* Travelers */}
+          <div className="space-y-2">
+            <label className="text-xs font-medium text-muted-foreground flex items-center gap-1.5"><Users className="w-3.5 h-3.5" /> Số người</label>
+            <div className="flex items-center gap-3">
+              <div className="flex items-center h-11 rounded-xl border-2 border-border bg-background overflow-hidden">
+                <button onClick={() => setTravelers(Math.max(1, travelers - 1))} className="w-10 h-full flex items-center justify-center text-muted-foreground hover:bg-muted/50 transition-colors text-lg font-bold">−</button>
+                <span className="w-10 text-center font-bold text-foreground">{travelers}</span>
+                <button onClick={() => setTravelers(Math.min(20, travelers + 1))} className="w-10 h-full flex items-center justify-center text-muted-foreground hover:bg-muted/50 transition-colors text-lg font-bold">+</button>
+              </div>
+              <div className="flex gap-1.5">
+                {[1, 2, 4, 6].map(n => (
+                  <button key={n} onClick={() => setTravelers(n)} className={`px-3 py-1.5 rounded-lg border-2 text-xs font-medium transition-all ${travelers === n ? "border-chip-orange bg-chip-orange/10 text-chip-orange" : "border-border bg-card text-muted-foreground hover:border-chip-orange/40"}`}>
+                    {n === 1 ? "Solo" : n === 2 ? "Đôi" : n === 4 ? "Nhóm 4" : "6+"}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
         </div>
 
-        {/* Travelers + Tickets */}
-        <div className="flex flex-col sm:flex-row gap-3">
-          <div className="flex-1 space-y-2">
-            <label className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
-              <Users className="w-3.5 h-3.5" /> Số người
-            </label>
-            <div className="flex items-center h-11 rounded-xl border-2 border-border bg-background overflow-hidden">
-              <button onClick={() => setTravelers(Math.max(1, travelers - 1))} className="w-10 h-full flex items-center justify-center text-muted-foreground hover:bg-muted/50 transition-colors text-lg font-bold">−</button>
-              <span className="flex-1 text-center font-bold text-foreground">{travelers}</span>
-              <button onClick={() => setTravelers(Math.min(20, travelers + 1))} className="w-10 h-full flex items-center justify-center text-muted-foreground hover:bg-muted/50 transition-colors text-lg font-bold">+</button>
-            </div>
-          </div>
-          <div className="flex-1 space-y-2">
-            <label className="text-xs font-medium text-muted-foreground">Số vé</label>
-            <div className="flex items-center h-11 rounded-xl border-2 border-border bg-background overflow-hidden">
-              <button onClick={() => setTickets(Math.max(1, tickets - 1))} className="w-10 h-full flex items-center justify-center text-muted-foreground hover:bg-muted/50 transition-colors text-lg font-bold">−</button>
-              <span className="flex-1 text-center font-bold text-foreground">{tickets}</span>
-              <button onClick={() => setTickets(Math.min(20, tickets + 1))} className="w-10 h-full flex items-center justify-center text-muted-foreground hover:bg-muted/50 transition-colors text-lg font-bold">+</button>
-            </div>
-          </div>
-          <div className="flex-1 space-y-2">
-            <label className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
-              <Wallet className="w-3.5 h-3.5" /> Ngân sách <span className="text-muted-foreground/60">(tuỳ chọn)</span>
-            </label>
-            <div className="flex gap-1.5">
-              {budgetPresets.map(p => (
-                <button key={p.label} onClick={() => { setBudget([p.value]); setBudgetInput(""); }} className={`flex-1 flex flex-col items-center gap-0.5 px-1 py-1.5 rounded-lg border-2 text-[10px] font-medium transition-all ${budget[0] === p.value && !budgetInput ? "border-chip-orange bg-chip-orange/10 text-chip-orange" : "border-border bg-background text-muted-foreground hover:border-chip-orange/40"}`}>
-                  <span className="text-sm">{p.emoji}</span>
-                  <span>{p.label}</span>
-                </button>
-              ))}
-            </div>
-          </div>
+        {/* Navigation */}
+        <div className="flex items-center gap-4 mt-2">
+          <Button variant="ghost" onClick={() => { setBranch(null); setKnownStep(0); }}>
+            <ArrowLeft className="w-4 h-4" /> Quay lại
+          </Button>
+          <Button variant="hero" onClick={() => setKnownStep(1)} disabled={!canNextKnown()}>
+            Tiếp theo <ArrowRight className="w-4 h-4" />
+          </Button>
         </div>
-      </div>
+      </motion.div>
+    );
 
-      {/* Style selection inline */}
-      <div className="w-full max-w-2xl space-y-3">
-        <div className="text-center space-y-1">
-          <h3 className="text-xl font-bold text-foreground">✨ Gu du lịch của bạn?</h3>
-          <p className="text-muted-foreground text-xs">Chọn một hoặc nhiều phong cách</p>
+    // Step 1: Travel styles
+    if (knownStep === 1) return (
+      <motion.div key="known-1" initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -30 }} className="flex flex-col items-center gap-6">
+        <div className="text-center space-y-2">
+          <h2 className="text-2xl lg:text-3xl font-bold text-foreground">✨ Gu du lịch của bạn?</h2>
+          <p className="text-muted-foreground text-sm">Chọn một hoặc nhiều phong cách</p>
         </div>
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 w-full max-w-2xl">
           {travelStyles.map((s) => (
-            <button
-              key={s.id}
-              onClick={() => toggleStyle(s.id)}
-              className={`relative flex flex-col items-start gap-1 p-3 rounded-2xl border-2 transition-all duration-200 text-left group hover:scale-[1.02] ${
-                styles.includes(s.id)
-                  ? "border-chip-orange bg-chip-orange/10 shadow-warm"
-                  : "border-border bg-card hover:border-chip-orange/40"
-              }`}
-            >
-              {s.popular && (
-                <span className="absolute -top-2 -right-2 px-2 py-0.5 rounded-full bg-gradient-accent text-[10px] font-bold text-accent-foreground">Hot</span>
-              )}
-              {styles.includes(s.id) && (
-                <div className="absolute top-2 right-2 w-5 h-5 rounded-full bg-chip-orange flex items-center justify-center">
-                  <Check className="w-3 h-3 text-accent-foreground" />
-                </div>
-              )}
+            <button key={s.id} onClick={() => toggleStyle(s.id)} className={`relative flex flex-col items-start gap-1 p-3 rounded-2xl border-2 transition-all duration-200 text-left group hover:scale-[1.02] ${styles.includes(s.id) ? "border-chip-orange bg-chip-orange/10 shadow-warm" : "border-border bg-card hover:border-chip-orange/40"}`}>
+              {s.popular && <span className="absolute -top-2 -right-2 px-2 py-0.5 rounded-full bg-gradient-accent text-[10px] font-bold text-accent-foreground">Hot</span>}
+              {styles.includes(s.id) && <div className="absolute top-2 right-2 w-5 h-5 rounded-full bg-chip-orange flex items-center justify-center"><Check className="w-3 h-3 text-accent-foreground" /></div>}
               <div className="flex items-center gap-2">
                 <span className="text-xl">{s.emoji}</span>
                 <span className="font-display font-semibold text-foreground text-sm">{s.label}</span>
@@ -425,19 +373,49 @@ const Planning = () => {
             </button>
           ))}
         </div>
-      </div>
+        <div className="flex items-center gap-4 mt-2">
+          <Button variant="ghost" onClick={() => setKnownStep(0)}>
+            <ArrowLeft className="w-4 h-4" /> Quay lại
+          </Button>
+          <Button variant="hero" onClick={() => setKnownStep(2)} disabled={!canNextKnown()}>
+            Tiếp theo <ArrowRight className="w-4 h-4" />
+          </Button>
+        </div>
+      </motion.div>
+    );
 
-      {/* Generate button */}
-      <div className="flex items-center gap-4 mt-2">
-        <Button variant="ghost" onClick={() => setBranch(null)}>
-          <ArrowLeft className="w-4 h-4" /> Quay lại
-        </Button>
-        <Button variant="cta" size="lg" onClick={handleGenerate} disabled={!canGenerate()}>
-          <Sparkles className="w-5 h-5" /> Tạo lịch trình siêu tốc
-        </Button>
-      </div>
-    </motion.div>
-  );
+    // Step 2: Budget
+    return (
+      <motion.div key="known-2" initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -30 }} className="flex flex-col items-center justify-center min-h-[60vh] gap-6">
+        <div className="text-center space-y-3">
+          <span className="text-5xl">💰</span>
+          <h2 className="text-3xl lg:text-4xl font-bold text-foreground">Ngân sách cho chuyến đi?</h2>
+          <p className="text-muted-foreground">Chọn mức ngân sách hoặc nhập số tiền</p>
+        </div>
+        <div className="flex gap-3">
+          {budgetPresets.map(p => (
+            <button key={p.label} onClick={() => { setBudget([p.value]); setBudgetInput(""); }} className={`flex flex-col items-center gap-1 px-5 py-3 rounded-2xl border-2 transition-all hover:scale-[1.03] ${budget[0] === p.value && !budgetInput ? "border-chip-orange bg-chip-orange/10 shadow-warm" : "border-border bg-card hover:border-chip-orange/40"}`}>
+              <span className="text-2xl">{p.emoji}</span>
+              <span className="font-semibold text-foreground text-sm">{p.label}</span>
+              <span className="text-xs text-muted-foreground">{p.desc}</span>
+            </button>
+          ))}
+        </div>
+        <div className="relative w-full max-w-sm">
+          <input value={budgetInput} onChange={(e) => handleBudgetInput(e.target.value)} placeholder="Nhập số tiền..." className="w-full h-14 px-5 pr-16 rounded-2xl border-2 border-border bg-card text-foreground text-lg font-medium placeholder:text-muted-foreground focus:outline-none focus:border-chip-orange focus:ring-4 focus:ring-chip-orange/10 transition-all text-center" />
+          <span className="absolute right-5 top-1/2 -translate-y-1/2 text-muted-foreground font-medium">VNĐ</span>
+        </div>
+        <div className="flex items-center gap-4 mt-2">
+          <Button variant="ghost" onClick={() => setKnownStep(1)}>
+            <ArrowLeft className="w-4 h-4" /> Quay lại
+          </Button>
+          <Button variant="cta" size="lg" onClick={handleGenerate}>
+            <Sparkles className="w-5 h-5" /> Tạo lịch trình siêu tốc
+          </Button>
+        </div>
+      </motion.div>
+    );
+  };
 
   // "Suggest" flow
   const renderSuggestFlow = () => (
@@ -570,6 +548,16 @@ const Planning = () => {
       <Navbar />
       <div className="pt-20 pb-12 px-6">
         <div className="container mx-auto max-w-3xl">
+          {/* Progress bar for known flow */}
+          {branch === "known" && !isLoading && (
+            <div className="max-w-lg mx-auto mb-6">
+              <div className="flex gap-2">
+                {[0, 1, 2].map((i) => (
+                  <div key={i} className={`h-1.5 flex-1 rounded-full transition-all duration-500 ${i <= knownStep ? "bg-chip-orange" : "bg-border"}`} />
+                ))}
+              </div>
+            </div>
+          )}
           <AnimatePresence mode="wait">
             {isLoading ? (
               <motion.div key="loading" initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="flex flex-col items-center justify-center min-h-[60vh] gap-6">
