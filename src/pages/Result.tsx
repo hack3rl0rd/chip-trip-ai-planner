@@ -86,8 +86,25 @@ const Result = () => {
   };
 
   useEffect(() => {
-    const tripId = searchParams.get("id") || searchParams.get("shared");
-    if (tripId) {
+    const tripId = searchParams.get("id");
+    const shareToken = searchParams.get("shared");
+    
+    if (shareToken) {
+      // Shared view - load by share_token
+      setLoadingTrip(true);
+      setIsSharedView(true);
+      supabase.from("trips").select("id, trip_data").eq("share_token", shareToken).maybeSingle().then(({ data }) => {
+        if (data?.trip_data) {
+          setTrip(data.trip_data as unknown as TripPlan);
+          setDbTripId(data.id);
+          setSaved(true);
+        } else {
+          toast.error("Link chia sẻ không hợp lệ hoặc đã hết hạn");
+          navigate("/");
+        }
+        setLoadingTrip(false);
+      });
+    } else if (tripId) {
       setLoadingTrip(true);
       setDbTripId(tripId);
       supabase.from("trips").select("id, trip_data").eq("id", tripId).maybeSingle().then(({ data }) => {
