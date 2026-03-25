@@ -59,6 +59,9 @@ const LocationDetail = () => {
           </Button>
         </div>
 
+        {/* Click outside overlay */}
+        <div className="fixed inset-0 z-0" onClick={() => navigate(-1)} />
+
         <div className="container mx-auto px-6 -mt-16 relative z-10">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
