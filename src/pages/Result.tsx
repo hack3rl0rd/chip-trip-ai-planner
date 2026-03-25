@@ -560,12 +560,22 @@ const Result = () => {
         </div>
       </div>
 
-      {/* Mascot */}
+      {/* Mascot with countdown */}
       <ChipMascot
-        storageKey="chip-result-welcome"
+        storageKey={`chip-result-${dbTripId || "new"}`}
+        countdown={trip.days[0]?.date ? { label: "Còn lại trước chuyến đi", targetDate: trip.days[0].date } : undefined}
         messages={[
-          { text: "Lịch trình xịn quá! Lưu lại để không mất nha 🐤", delay: 1500 },
-          { text: "Thêm bạn bè vào nhóm để chia tiền dễ hơn!", delay: 10000 },
+          { 
+            text: saved 
+              ? `Lịch trình "${trip.destination}" đã lưu! Bấm bên dưới để xem lại bất cứ lúc nào 🐤`
+              : "Lịch trình xịn quá! Lưu lại để không mất nha 🐤",
+            delay: 1500,
+            action: saved 
+              ? { label: "Xem chuyến đi đã lưu", onClick: () => navigate("/saved") }
+              : { label: "Lưu ngay", onClick: handleSave }
+          },
+          { text: "Bấm vào hoạt động để xem chi tiết, hoặc dùng nút Đổi / Xóa để chỉnh sửa nhanh! ✏️", delay: 10000 },
+          { text: "Thêm bạn bè vào nhóm để chia tiền dễ hơn!", delay: 15000 },
         ]}
       />
 
