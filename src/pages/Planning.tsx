@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
-import { Search, CalendarDays, ArrowRight, ArrowLeft, Sparkles, Loader2, Check, ArrowLeftRight, MapPin } from "lucide-react";
+import { Search, CalendarDays, ArrowRight, ArrowLeft, Sparkles, Loader2, Check, ArrowLeftRight, MapPin, Users, Wallet } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
@@ -31,12 +31,48 @@ const travelStyles = [
   { id: "group", label: "Bạn bè / Nhóm", emoji: "🎉", desc: "Vui, sôi động, team building" },
 ];
 
-const budgetLabels = ["< 500K", "500K-1M", "1-2M", "2-3M", "3-5M", "5-8M", "8-12M", "12M+"];
 const budgetPresets = [
   { label: "Tiết kiệm", desc: "< 2M", value: 2, emoji: "💵" },
   { label: "Trung bình", desc: "3-5M", value: 4, emoji: "💰" },
   { label: "Thoải mái", desc: "8M+", value: 6, emoji: "💎" },
 ];
+
+const vibeOptions = [
+  { id: "beach", label: "Biển", emoji: "🌴" },
+  { id: "mountain", label: "Núi", emoji: "⛰" },
+  { id: "city", label: "Thành phố", emoji: "🏙" },
+  { id: "nightlife", label: "Nightlife", emoji: "🎉" },
+];
+
+const regions = [
+  {
+    label: "Miền Bắc", emoji: "🏛️",
+    places: [
+      { name: "Hà Nội", emoji: "🏛️" }, { name: "Sapa", emoji: "🏔️" },
+      { name: "Hạ Long", emoji: "🛶" }, { name: "Ninh Bình", emoji: "⛰️" },
+      { name: "Hà Giang", emoji: "🌄" }, { name: "Mai Châu", emoji: "🌾" },
+    ],
+  },
+  {
+    label: "Miền Trung", emoji: "🏖️",
+    places: [
+      { name: "Đà Nẵng", emoji: "🏖️" }, { name: "Hội An", emoji: "🏮" },
+      { name: "Huế", emoji: "👑" }, { name: "Nha Trang", emoji: "🐚" },
+      { name: "Quy Nhơn", emoji: "🌊" }, { name: "Phong Nha", emoji: "🦇" },
+    ],
+  },
+  {
+    label: "Miền Nam", emoji: "🌴",
+    places: [
+      { name: "Phú Quốc", emoji: "🌴" }, { name: "Đà Lạt", emoji: "🌸" },
+      { name: "TP.HCM", emoji: "🏙️" }, { name: "Vũng Tàu", emoji: "⛱️" },
+      { name: "Cần Thơ", emoji: "🚣" }, { name: "Côn Đảo", emoji: "🐢" },
+    ],
+  },
+];
+
+type Branch = null | "known" | "suggest";
+type SuggestedPlace = { name: string; desc: string; emoji: string };
 
 const Planning = () => {
   const navigate = useNavigate();
@@ -48,7 +84,10 @@ const Planning = () => {
     }
   }, [user, authLoading, navigate]);
 
-  const [step, setStep] = useState(0);
+  // Branch selection
+  const [branch, setBranch] = useState<Branch>(null);
+
+  // Known destination flow state
   const [origin, setOrigin] = useState("");
   const [destination, setDestination] = useState("");
   const [tripType, setTripType] = useState<"roundtrip" | "oneway">("roundtrip");
@@ -64,21 +103,77 @@ const Planning = () => {
   const [destFocused, setDestFocused] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
+  // Suggest flow state
+  const [vibes, setVibes] = useState<string[]>([]);
+  const [customVibe, setCustomVibe] = useState("");
+  const [suggestBudget, setSuggestBudget] = useState([4]);
+  const [suggestDays, setSuggestDays] = useState(3);
+  const [suggestedPlaces, setSuggestedPlaces] = useState<SuggestedPlace[]>([]);
+  const [isSuggesting, setIsSuggesting] = useState(false);
+  const [suggestStep, setSuggestStep] = useState(0); // 0: preferences, 1: results
+
   const toggleStyle = (id: string) => {
     setStyles((prev) =>
       prev.includes(id) ? prev.filter((s) => s !== id) : [...prev, id]
     );
   };
 
-  // Sync budget slider to input
-  const handleBudgetSlider = (val: number[]) => {
-    setBudget(val);
-    setBudgetInput("");
+  const toggleVibe = (id: string) => {
+    setVibes((prev) =>
+      prev.includes(id) ? prev.filter((v) => v !== id) : [...prev, id]
+    );
   };
 
   const handleBudgetInput = (val: string) => {
     const clean = val.replace(/[^0-9]/g, "");
     setBudgetInput(clean ? Number(clean).toLocaleString("vi-VN") : "");
+  };
+
+  const allPlaces = regions.flatMap(r => r.places);
+  const filteredOriginSuggestions = originFocused && origin.length > 0
+    ? allPlaces.filter(p => p.name.toLowerCase().includes(origin.toLowerCase()) && p.name.toLowerCase() !== origin.toLowerCase())
+    : [];
+  const filteredDestSuggestions = destFocused && destination.length > 0
+    ? allPlaces.filter(p => p.name.toLowerCase().includes(destination.toLowerCase()) && p.name.toLowerCase() !== destination.toLowerCase())
+    : [];
+
+  const swapOriginDest = () => {
+    const tmp = origin;
+    setOrigin(destination);
+    setDestination(tmp);
+  };
+
+  // AI suggest destinations
+  const handleSuggest = async () => {
+    setIsSuggesting(true);
+    try {
+      const vibeText = [...vibes.map(v => vibeOptions.find(o => o.id === v)?.label || v), customVibe].filter(Boolean).join(", ");
+      const budgetLabels = ["< 500K", "500K-1M", "1-2M", "2-3M", "3-5M", "5-8M", "8-12M", "12M+"];
+      const budgetText = budgetLabels[suggestBudget[0]] || "3-5M";
+
+      const { data, error } = await supabase.functions.invoke("suggest-destinations", {
+        body: { vibes: vibeText, budget: budgetText, days: suggestDays },
+      });
+
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+
+      setSuggestedPlaces(data.suggestions || []);
+      setSuggestStep(1);
+    } catch (err: any) {
+      console.error("Suggest failed:", err);
+      toast.error(err.message || "Gợi ý thất bại, vui lòng thử lại");
+    } finally {
+      setIsSuggesting(false);
+    }
+  };
+
+  const selectSuggestedPlace = (place: SuggestedPlace) => {
+    setDestination(place.name);
+    setBranch("known");
+    // Reset suggest state
+    setSuggestStep(0);
+    setSuggestedPlaces([]);
   };
 
   const handleGenerate = async () => {
@@ -118,70 +213,55 @@ const Planning = () => {
     }
   };
 
-  const canNext = () => {
-    if (step === 0) {
-      const hasBasic = origin.length > 0 && destination.length > 0 && dates.start;
-      if (tripType === "roundtrip") return hasBasic && dates.end;
-      return hasBasic;
-    }
-    if (step === 1) return styles.length > 0;
-    if (step === 2) return true;
-    return true;
+  const canGenerate = () => {
+    return destination.length > 0 && dates.start && styles.length > 0;
   };
 
-  const regions = [
-    {
-      label: "Miền Bắc", emoji: "🏛️",
-      places: [
-        { name: "Hà Nội", emoji: "🏛️" }, { name: "Sapa", emoji: "🏔️" },
-        { name: "Hạ Long", emoji: "🛶" }, { name: "Ninh Bình", emoji: "⛰️" },
-        { name: "Hà Giang", emoji: "🌄" }, { name: "Mai Châu", emoji: "🌾" },
-      ],
-    },
-    {
-      label: "Miền Trung", emoji: "🏖️",
-      places: [
-        { name: "Đà Nẵng", emoji: "🏖️" }, { name: "Hội An", emoji: "🏮" },
-        { name: "Huế", emoji: "👑" }, { name: "Nha Trang", emoji: "🐚" },
-        { name: "Quy Nhơn", emoji: "🌊" }, { name: "Phong Nha", emoji: "🦇" },
-      ],
-    },
-    {
-      label: "Miền Nam", emoji: "🌴",
-      places: [
-        { name: "Phú Quốc", emoji: "🌴" }, { name: "Đà Lạt", emoji: "🌸" },
-        { name: "TP.HCM", emoji: "🏙️" }, { name: "Vũng Tàu", emoji: "⛱️" },
-        { name: "Cần Thơ", emoji: "🚣" }, { name: "Côn Đảo", emoji: "🐢" },
-      ],
-    },
-  ];
+  // ==================== RENDER ====================
 
-  const allPlaces = regions.flatMap(r => r.places);
-  const filteredOriginSuggestions = originFocused && origin.length > 0
-    ? allPlaces.filter(p => p.name.toLowerCase().includes(origin.toLowerCase()) && p.name.toLowerCase() !== origin.toLowerCase())
-    : [];
-  const filteredDestSuggestions = destFocused && destination.length > 0
-    ? allPlaces.filter(p => p.name.toLowerCase().includes(destination.toLowerCase()) && p.name.toLowerCase() !== destination.toLowerCase())
-    : [];
-
-  const swapOriginDest = () => {
-    const tmp = origin;
-    setOrigin(destination);
-    setDestination(tmp);
-  };
-
-  const steps = [
-    // Step 0: Futabus-style booking form
-    <motion.div key="step0" initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -30 }} className="flex flex-col items-center justify-center min-h-[60vh] gap-6">
+  // Initial question screen
+  const renderBranchSelection = () => (
+    <motion.div key="branch" initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -30 }} className="flex flex-col items-center justify-center min-h-[60vh] gap-8">
       <div className="text-center space-y-3">
-        <span className="text-5xl">🗺️</span>
-        <h2 className="text-3xl lg:text-4xl font-bold text-foreground">Lên kế hoạch chuyến đi</h2>
-        <p className="text-muted-foreground">Điền thông tin để AI tạo lịch trình cho bạn</p>
+        <span className="text-6xl">✈️</span>
+        <h1 className="text-3xl lg:text-4xl font-bold text-foreground">Bạn đã có điểm đến chưa?</h1>
+        <p className="text-muted-foreground text-lg">Chọn để bắt đầu lên kế hoạch</p>
       </div>
 
+      <div className="flex flex-col sm:flex-row gap-4 w-full max-w-lg">
+        <button
+          onClick={() => setBranch("known")}
+          className="flex-1 flex flex-col items-center gap-3 p-6 rounded-2xl border-2 border-border bg-card hover:border-chip-orange hover:shadow-warm transition-all group"
+        >
+          <span className="text-4xl group-hover:scale-110 transition-transform">🗺️</span>
+          <span className="font-display font-bold text-lg text-foreground">Có rồi</span>
+          <span className="text-sm text-muted-foreground text-center">Tôi đã biết muốn đi đâu, giúp tôi lên lịch trình</span>
+        </button>
+
+        <button
+          onClick={() => setBranch("suggest")}
+          className="flex-1 flex flex-col items-center gap-3 p-6 rounded-2xl border-2 border-border bg-card hover:border-primary hover:shadow-warm transition-all group"
+        >
+          <span className="text-4xl group-hover:scale-110 transition-transform">🤖</span>
+          <span className="font-display font-bold text-lg text-foreground">Chưa, gợi ý giúp tôi</span>
+          <span className="text-sm text-muted-foreground text-center">AI sẽ gợi ý điểm đến phù hợp với sở thích của bạn</span>
+        </button>
+      </div>
+    </motion.div>
+  );
+
+  // "Known destination" all-in-one form + style selection
+  const renderKnownFlow = () => (
+    <motion.div key="known" initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -30 }} className="flex flex-col items-center gap-6">
+      <div className="text-center space-y-2">
+        <h2 className="text-2xl lg:text-3xl font-bold text-foreground">🗺️ Lên kế hoạch chuyến đi</h2>
+        <p className="text-muted-foreground text-sm">Điền thông tin & chọn gu du lịch để AI tạo lịch trình</p>
+      </div>
+
+      {/* All-in-one booking card */}
       <div className="w-full max-w-2xl bg-card border-2 border-border rounded-2xl p-5 space-y-4">
         {/* Trip type toggle */}
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3">
           <button onClick={() => setTripType("oneway")} className={`flex items-center gap-2 px-4 py-2 rounded-xl border-2 text-sm font-medium transition-all ${tripType === "oneway" ? "border-chip-orange bg-chip-orange/10 text-chip-orange" : "border-border text-muted-foreground hover:border-chip-orange/40"}`}>
             <ArrowRight className="w-4 h-4" /> Một chiều
           </button>
@@ -241,13 +321,13 @@ const Planning = () => {
           </div>
         </div>
 
-        {/* Dates + Tickets row */}
-        <div className="flex flex-col sm:flex-row gap-3">
-          <div className="flex-1 space-y-2">
+        {/* Dates + Travelers + Budget row */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="space-y-2">
             <label className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
               <CalendarDays className="w-3.5 h-3.5" /> Ngày đi
             </label>
-            <input type="date" value={dates.start} onChange={(e) => setDates({ ...dates, start: e.target.value })} className="w-full h-12 px-4 rounded-xl border-2 border-border bg-background text-foreground font-medium focus:outline-none focus:border-chip-orange focus:ring-4 focus:ring-chip-orange/10 transition-all" />
+            <input type="date" value={dates.start} onChange={(e) => setDates({ ...dates, start: e.target.value })} className="w-full h-11 px-4 rounded-xl border-2 border-border bg-background text-foreground font-medium focus:outline-none focus:border-chip-orange focus:ring-4 focus:ring-chip-orange/10 transition-all" />
             <div className="flex gap-1.5">
               {timeSlots.map(ts => (
                 <button key={ts.id} onClick={() => setDepartureTime(ts.id)} className={`flex-1 flex flex-col items-center gap-0.5 px-1 py-1.5 rounded-lg border-2 text-[10px] font-medium transition-all ${departureTime === ts.id ? "border-chip-orange bg-chip-orange/10 text-chip-orange" : "border-border bg-background text-muted-foreground hover:border-chip-orange/40"}`}>
@@ -259,11 +339,11 @@ const Planning = () => {
           </div>
 
           {tripType === "roundtrip" && (
-            <div className="flex-1 space-y-2">
+            <div className="space-y-2">
               <label className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
                 <CalendarDays className="w-3.5 h-3.5" /> Ngày về
               </label>
-              <input type="date" value={dates.end} onChange={(e) => setDates({ ...dates, end: e.target.value })} className="w-full h-12 px-4 rounded-xl border-2 border-border bg-background text-foreground font-medium focus:outline-none focus:border-chip-orange focus:ring-4 focus:ring-chip-orange/10 transition-all" />
+              <input type="date" value={dates.end} onChange={(e) => setDates({ ...dates, end: e.target.value })} className="w-full h-11 px-4 rounded-xl border-2 border-border bg-background text-foreground font-medium focus:outline-none focus:border-chip-orange focus:ring-4 focus:ring-chip-orange/10 transition-all" />
               <div className="flex gap-1.5">
                 {timeSlots.map(ts => (
                   <button key={ts.id} onClick={() => setReturnTime(ts.id)} className={`flex-1 flex flex-col items-center gap-0.5 px-1 py-1.5 rounded-lg border-2 text-[10px] font-medium transition-all ${returnTime === ts.id ? "border-chip-orange bg-chip-orange/10 text-chip-orange" : "border-border bg-background text-muted-foreground hover:border-chip-orange/40"}`}>
@@ -274,140 +354,222 @@ const Planning = () => {
               </div>
             </div>
           )}
+        </div>
 
-          {/* Tickets */}
-          <div className="w-full sm:w-28 space-y-2">
+        {/* Travelers + Tickets */}
+        <div className="flex flex-col sm:flex-row gap-3">
+          <div className="flex-1 space-y-2">
+            <label className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
+              <Users className="w-3.5 h-3.5" /> Số người
+            </label>
+            <div className="flex items-center h-11 rounded-xl border-2 border-border bg-background overflow-hidden">
+              <button onClick={() => setTravelers(Math.max(1, travelers - 1))} className="w-10 h-full flex items-center justify-center text-muted-foreground hover:bg-muted/50 transition-colors text-lg font-bold">−</button>
+              <span className="flex-1 text-center font-bold text-foreground">{travelers}</span>
+              <button onClick={() => setTravelers(Math.min(20, travelers + 1))} className="w-10 h-full flex items-center justify-center text-muted-foreground hover:bg-muted/50 transition-colors text-lg font-bold">+</button>
+            </div>
+          </div>
+          <div className="flex-1 space-y-2">
             <label className="text-xs font-medium text-muted-foreground">Số vé</label>
-            <div className="flex items-center h-12 rounded-xl border-2 border-border bg-background overflow-hidden">
+            <div className="flex items-center h-11 rounded-xl border-2 border-border bg-background overflow-hidden">
               <button onClick={() => setTickets(Math.max(1, tickets - 1))} className="w-10 h-full flex items-center justify-center text-muted-foreground hover:bg-muted/50 transition-colors text-lg font-bold">−</button>
               <span className="flex-1 text-center font-bold text-foreground">{tickets}</span>
               <button onClick={() => setTickets(Math.min(20, tickets + 1))} className="w-10 h-full flex items-center justify-center text-muted-foreground hover:bg-muted/50 transition-colors text-lg font-bold">+</button>
             </div>
           </div>
-        </div>
-      </div>
-
-      {/* Region suggestions */}
-      {!destination && !origin && (
-        <div className="w-full max-w-2xl space-y-3">
-          {regions.map(region => (
-            <div key={region.label}>
-              <p className="text-xs font-semibold text-muted-foreground mb-2 flex items-center gap-1.5">
-                <span>{region.emoji}</span> {region.label}
-              </p>
-              <div className="flex flex-wrap gap-2">
-                {region.places.map(p => (
-                  <button key={p.name} onClick={() => setDestination(p.name)} className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-border bg-card hover:border-chip-orange/40 hover:shadow-warm transition-all text-sm font-medium text-foreground">
-                    <span>{p.emoji}</span> {p.name}
-                  </button>
-                ))}
-              </div>
+          <div className="flex-1 space-y-2">
+            <label className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
+              <Wallet className="w-3.5 h-3.5" /> Ngân sách <span className="text-muted-foreground/60">(tuỳ chọn)</span>
+            </label>
+            <div className="flex gap-1.5">
+              {budgetPresets.map(p => (
+                <button key={p.label} onClick={() => { setBudget([p.value]); setBudgetInput(""); }} className={`flex-1 flex flex-col items-center gap-0.5 px-1 py-1.5 rounded-lg border-2 text-[10px] font-medium transition-all ${budget[0] === p.value && !budgetInput ? "border-chip-orange bg-chip-orange/10 text-chip-orange" : "border-border bg-background text-muted-foreground hover:border-chip-orange/40"}`}>
+                  <span className="text-sm">{p.emoji}</span>
+                  <span>{p.label}</span>
+                </button>
+              ))}
             </div>
-          ))}
+          </div>
         </div>
-      )}
-    </motion.div>,
-
-    // Step 2: Travelers + Styles (merged)
-    <motion.div key="step2" initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -30 }} className="flex flex-col items-center min-h-[60vh] gap-6">
-      {/* Travelers */}
-      <div className="text-center space-y-2">
-        <span className="text-4xl">👥</span>
-        <h2 className="text-2xl lg:text-3xl font-bold text-foreground">Đi bao nhiêu người?</h2>
       </div>
-      <div className="flex items-center gap-4">
-        <button onClick={() => setTravelers(Math.max(1, travelers - 1))} className="w-12 h-12 rounded-2xl border-2 border-border bg-card flex items-center justify-center text-xl font-bold text-foreground hover:border-chip-orange transition-all">−</button>
-        <span className="text-4xl font-bold text-gradient w-12 text-center">{travelers}</span>
-        <button onClick={() => setTravelers(Math.min(20, travelers + 1))} className="w-12 h-12 rounded-2xl border-2 border-border bg-card flex items-center justify-center text-xl font-bold text-foreground hover:border-chip-orange transition-all">+</button>
-        <div className="flex gap-2 ml-2">
-          {[1, 2, 4, 6].map(n => (
-            <button key={n} onClick={() => setTravelers(n)} className={`px-3 py-1.5 rounded-xl border-2 text-xs font-medium transition-all ${travelers === n ? "border-chip-orange bg-chip-orange/10 text-chip-orange" : "border-border bg-card text-muted-foreground hover:border-chip-orange/40"}`}>
-              {n === 1 ? "Solo" : n === 2 ? "Đôi" : n === 4 ? "Nhóm 4" : "6+"}
+
+      {/* Style selection inline */}
+      <div className="w-full max-w-2xl space-y-3">
+        <div className="text-center space-y-1">
+          <h3 className="text-xl font-bold text-foreground">✨ Gu du lịch của bạn?</h3>
+          <p className="text-muted-foreground text-xs">Chọn một hoặc nhiều phong cách</p>
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+          {travelStyles.map((s) => (
+            <button
+              key={s.id}
+              onClick={() => toggleStyle(s.id)}
+              className={`relative flex flex-col items-start gap-1 p-3 rounded-2xl border-2 transition-all duration-200 text-left group hover:scale-[1.02] ${
+                styles.includes(s.id)
+                  ? "border-chip-orange bg-chip-orange/10 shadow-warm"
+                  : "border-border bg-card hover:border-chip-orange/40"
+              }`}
+            >
+              {s.popular && (
+                <span className="absolute -top-2 -right-2 px-2 py-0.5 rounded-full bg-gradient-accent text-[10px] font-bold text-accent-foreground">Hot</span>
+              )}
+              {styles.includes(s.id) && (
+                <div className="absolute top-2 right-2 w-5 h-5 rounded-full bg-chip-orange flex items-center justify-center">
+                  <Check className="w-3 h-3 text-accent-foreground" />
+                </div>
+              )}
+              <div className="flex items-center gap-2">
+                <span className="text-xl">{s.emoji}</span>
+                <span className="font-display font-semibold text-foreground text-sm">{s.label}</span>
+              </div>
+              <span className="text-[11px] text-muted-foreground leading-tight">{s.desc}</span>
             </button>
           ))}
         </div>
       </div>
 
-      {/* Styles */}
-      <div className="text-center space-y-2 mt-2">
-        <h2 className="text-2xl lg:text-3xl font-bold text-foreground">✨ Gu du lịch của bạn?</h2>
-        <p className="text-muted-foreground text-sm">Chọn một hoặc nhiều phong cách</p>
+      {/* Generate button */}
+      <div className="flex items-center gap-4 mt-2">
+        <Button variant="ghost" onClick={() => setBranch(null)}>
+          <ArrowLeft className="w-4 h-4" /> Quay lại
+        </Button>
+        <Button variant="cta" size="lg" onClick={handleGenerate} disabled={!canGenerate()}>
+          <Sparkles className="w-5 h-5" /> Tạo lịch trình siêu tốc
+        </Button>
       </div>
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 w-full max-w-2xl">
-        {travelStyles.map((s) => (
-          <button
-            key={s.id}
-            onClick={() => toggleStyle(s.id)}
-            className={`relative flex flex-col items-start gap-1 p-4 rounded-2xl border-2 transition-all duration-200 text-left group hover:scale-[1.03] hover:shadow-warm ${
-              styles.includes(s.id)
-                ? "border-chip-orange bg-chip-orange/10 shadow-warm"
-                : "border-border bg-card hover:border-chip-orange/40"
-            }`}
-          >
-            {s.popular && (
-              <span className="absolute -top-2 -right-2 px-2 py-0.5 rounded-full bg-gradient-accent text-[10px] font-bold text-accent-foreground">Phổ biến</span>
-            )}
-            {styles.includes(s.id) && (
-              <div className="absolute top-2 right-2 w-5 h-5 rounded-full bg-chip-orange flex items-center justify-center">
-                <Check className="w-3 h-3 text-accent-foreground" />
-              </div>
-            )}
-            <div className="flex items-center gap-2">
-              <span className="text-2xl">{s.emoji}</span>
-              <span className="font-display font-semibold text-foreground text-sm">{s.label}</span>
+    </motion.div>
+  );
+
+  // "Suggest" flow
+  const renderSuggestFlow = () => (
+    <motion.div key="suggest" initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -30 }} className="flex flex-col items-center gap-6">
+      {suggestStep === 0 ? (
+        <>
+          <div className="text-center space-y-3">
+            <span className="text-5xl">🤖</span>
+            <h2 className="text-2xl lg:text-3xl font-bold text-foreground">Bạn thích gì?</h2>
+            <p className="text-muted-foreground text-sm">Chọn sở thích để AI gợi ý điểm đến phù hợp</p>
+          </div>
+
+          {/* Vibe options */}
+          <div className="grid grid-cols-2 gap-3 w-full max-w-md">
+            {vibeOptions.map(v => (
+              <button
+                key={v.id}
+                onClick={() => toggleVibe(v.id)}
+                className={`flex items-center gap-3 p-4 rounded-2xl border-2 transition-all text-left hover:scale-[1.02] ${
+                  vibes.includes(v.id)
+                    ? "border-chip-orange bg-chip-orange/10 shadow-warm"
+                    : "border-border bg-card hover:border-chip-orange/40"
+                }`}
+              >
+                <span className="text-3xl">{v.emoji}</span>
+                <span className="font-display font-semibold text-foreground">{v.label}</span>
+                {vibes.includes(v.id) && (
+                  <Check className="w-4 h-4 text-chip-orange ml-auto" />
+                )}
+              </button>
+            ))}
+          </div>
+
+          {/* Custom vibe input */}
+          <div className="w-full max-w-md">
+            <input
+              value={customVibe}
+              onChange={(e) => setCustomVibe(e.target.value)}
+              placeholder="Hoặc nhập sở thích khác... (vd: cắm trại, lặn biển)"
+              className="w-full h-12 px-4 rounded-xl border-2 border-border bg-background text-foreground font-medium placeholder:text-muted-foreground focus:outline-none focus:border-chip-orange focus:ring-4 focus:ring-chip-orange/10 transition-all text-sm"
+            />
+          </div>
+
+          {/* Budget */}
+          <div className="w-full max-w-md space-y-2">
+            <label className="text-sm font-medium text-foreground flex items-center gap-2">
+              <Wallet className="w-4 h-4" /> Ngân sách
+            </label>
+            <div className="flex gap-2">
+              {budgetPresets.map(p => (
+                <button key={p.label} onClick={() => setSuggestBudget([p.value])} className={`flex-1 flex flex-col items-center gap-1 px-3 py-3 rounded-xl border-2 transition-all ${suggestBudget[0] === p.value ? "border-chip-orange bg-chip-orange/10 text-chip-orange" : "border-border bg-card text-muted-foreground hover:border-chip-orange/40"}`}>
+                  <span className="text-xl">{p.emoji}</span>
+                  <span className="font-semibold text-xs">{p.label}</span>
+                  <span className="text-[10px]">{p.desc}</span>
+                </button>
+              ))}
             </div>
-            <span className="text-xs text-muted-foreground leading-tight">{s.desc}</span>
-          </button>
-        ))}
-      </div>
-    </motion.div>,
+          </div>
 
-    // Step 3: Budget
-    <motion.div key="step3" initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -30 }} className="flex flex-col items-center justify-center min-h-[60vh] gap-6">
-      <div className="text-center space-y-3">
-        <span className="text-5xl">💰</span>
-        <h2 className="text-3xl lg:text-4xl font-bold text-foreground">Ngân sách cho chuyến đi?</h2>
-        <p className="text-muted-foreground">Kéo thanh trượt hoặc nhập số tiền</p>
-      </div>
+          {/* Duration */}
+          <div className="w-full max-w-md space-y-2">
+            <label className="text-sm font-medium text-foreground flex items-center gap-2">
+              <CalendarDays className="w-4 h-4" /> Bạn đi mấy ngày?
+            </label>
+            <div className="flex items-center gap-3">
+              <button onClick={() => setSuggestDays(Math.max(1, suggestDays - 1))} className="w-10 h-10 rounded-xl border-2 border-border bg-card flex items-center justify-center text-lg font-bold text-foreground hover:border-chip-orange transition-all">−</button>
+              <span className="text-3xl font-bold text-foreground w-12 text-center">{suggestDays}</span>
+              <span className="text-muted-foreground font-medium">ngày</span>
+              <button onClick={() => setSuggestDays(Math.min(14, suggestDays + 1))} className="w-10 h-10 rounded-xl border-2 border-border bg-card flex items-center justify-center text-lg font-bold text-foreground hover:border-chip-orange transition-all">+</button>
+              <div className="flex gap-1.5 ml-auto">
+                {[2, 3, 5, 7].map(n => (
+                  <button key={n} onClick={() => setSuggestDays(n)} className={`px-3 py-1.5 rounded-lg border-2 text-xs font-medium transition-all ${suggestDays === n ? "border-chip-orange bg-chip-orange/10 text-chip-orange" : "border-border bg-card text-muted-foreground hover:border-chip-orange/40"}`}>
+                    {n} ngày
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
 
-      {/* Quick presets */}
-      <div className="flex gap-3">
-        {budgetPresets.map(p => (
-          <button key={p.label} onClick={() => { setBudget([p.value]); setBudgetInput(""); }} className={`flex flex-col items-center gap-1 px-5 py-3 rounded-2xl border-2 transition-all hover:scale-[1.03] ${budget[0] === p.value && !budgetInput ? "border-chip-orange bg-chip-orange/10 shadow-warm" : "border-border bg-card hover:border-chip-orange/40"}`}>
-            <span className="text-2xl">{p.emoji}</span>
-            <span className="font-semibold text-foreground text-sm">{p.label}</span>
-            <span className="text-xs text-muted-foreground">{p.desc}</span>
-          </button>
-        ))}
-      </div>
+          {/* Actions */}
+          <div className="flex items-center gap-4">
+            <Button variant="ghost" onClick={() => setBranch(null)}>
+              <ArrowLeft className="w-4 h-4" /> Quay lại
+            </Button>
+            <Button variant="hero" onClick={handleSuggest} disabled={vibes.length === 0 && !customVibe || isSuggesting}>
+              {isSuggesting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+              {isSuggesting ? "Đang tìm..." : "Gợi ý cho tôi"}
+            </Button>
+          </div>
+        </>
+      ) : (
+        // Suggest results - destination cards
+        <>
+          <div className="text-center space-y-3">
+            <span className="text-5xl">🎯</span>
+            <h2 className="text-2xl lg:text-3xl font-bold text-foreground">AI gợi ý cho bạn</h2>
+            <p className="text-muted-foreground text-sm">Chọn 1 điểm đến để tiếp tục lên lịch trình</p>
+          </div>
 
-      {/* Direct input */}
-      <div className="relative w-full max-w-sm">
-        <input
-          value={budgetInput}
-          onChange={(e) => handleBudgetInput(e.target.value)}
-          placeholder="Nhập số tiền..."
-          className="w-full h-14 px-5 pr-16 rounded-2xl border-2 border-border bg-card text-foreground text-lg font-medium placeholder:text-muted-foreground focus:outline-none focus:border-chip-orange focus:ring-4 focus:ring-chip-orange/10 transition-all text-center"
-        />
-        <span className="absolute right-5 top-1/2 -translate-y-1/2 text-muted-foreground font-medium">VNĐ</span>
-      </div>
-    </motion.div>,
-  ];
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 w-full max-w-3xl">
+            {suggestedPlaces.map((place, i) => (
+              <button
+                key={i}
+                onClick={() => selectSuggestedPlace(place)}
+                className="flex flex-col items-start gap-2 p-5 rounded-2xl border-2 border-border bg-card hover:border-chip-orange hover:shadow-warm transition-all text-left group"
+              >
+                <span className="text-3xl group-hover:scale-110 transition-transform">{place.emoji}</span>
+                <span className="font-display font-bold text-lg text-foreground">{place.name}</span>
+                <span className="text-sm text-muted-foreground leading-snug">{place.desc}</span>
+              </button>
+            ))}
+          </div>
+
+          <div className="flex items-center gap-4">
+            <Button variant="ghost" onClick={() => setSuggestStep(0)}>
+              <ArrowLeft className="w-4 h-4" /> Chọn lại sở thích
+            </Button>
+            <Button variant="outline" onClick={handleSuggest} disabled={isSuggesting}>
+              {isSuggesting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+              Gợi ý khác
+            </Button>
+          </div>
+        </>
+      )}
+    </motion.div>
+  );
 
   return (
     <div className="min-h-screen bg-background">
       <Navbar />
       <div className="pt-20 pb-12 px-6">
-        {/* Progress bar - 3 steps */}
-        <div className="container mx-auto max-w-lg mb-8">
-          <div className="flex gap-2">
-            {[0, 1, 2].map((i) => (
-              <div key={i} className={`h-1.5 flex-1 rounded-full transition-all duration-500 ${i <= step ? "bg-chip-orange" : "bg-border"}`} />
-            ))}
-          </div>
-        </div>
-
-        <div className="container mx-auto max-w-2xl">
+        <div className="container mx-auto max-w-3xl">
           <AnimatePresence mode="wait">
             {isLoading ? (
               <motion.div key="loading" initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="flex flex-col items-center justify-center min-h-[60vh] gap-6">
@@ -417,39 +579,16 @@ const Planning = () => {
                 <h2 className="text-2xl font-bold text-foreground">AI đang tạo lịch trình...</h2>
                 <p className="text-muted-foreground">Chip Trip đang tìm kiếm lịch trình hoàn hảo cho <span className="font-semibold text-chip-orange">{destination}</span></p>
               </motion.div>
+            ) : branch === null ? (
+              renderBranchSelection()
+            ) : branch === "known" ? (
+              renderKnownFlow()
             ) : (
-              steps[step]
+              renderSuggestFlow()
             )}
           </AnimatePresence>
-
-          {!isLoading && (
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex justify-between items-center mt-8 max-w-lg mx-auto">
-              <Button variant="ghost" onClick={() => setStep((s) => s - 1)} disabled={step === 0}>
-                <ArrowLeft className="w-4 h-4" /> Quay lại
-              </Button>
-              {step < 2 ? (
-                <Button variant="hero" onClick={() => setStep((s) => s + 1)} disabled={!canNext()}>
-                  Tiếp theo <ArrowRight className="w-4 h-4" />
-                </Button>
-              ) : (
-                <Button variant="cta" size="lg" onClick={handleGenerate} disabled={!canNext()}>
-                  <Sparkles className="w-5 h-5" /> Tạo lịch trình siêu tốc
-                </Button>
-              )}
-            </motion.div>
-          )}
         </div>
       </div>
-
-      {/* Mascot */}
-      {step === 2 && (
-        <ChipMascot
-          storageKey="chip-planning-budget"
-          messages={[
-            { text: "Thêm ngân sách để plan xịn hơn nha! 💰", delay: 2000 },
-          ]}
-        />
-      )}
     </div>
   );
 };
