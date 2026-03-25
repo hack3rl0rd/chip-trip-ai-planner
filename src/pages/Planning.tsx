@@ -353,7 +353,7 @@ const Planning = () => {
               <Button variant="ghost" onClick={() => setStep((s) => s - 1)} disabled={step === 0}>
                 <ArrowLeft className="w-4 h-4" /> Quay lại
               </Button>
-              {step < 3 ? (
+              {step < 2 ? (
                 <Button variant="hero" onClick={() => setStep((s) => s + 1)} disabled={!canNext()}>
                   Tiếp theo <ArrowRight className="w-4 h-4" />
                 </Button>
