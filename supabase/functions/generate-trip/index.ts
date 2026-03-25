@@ -44,13 +44,39 @@ serve(async (req) => {
     const depTimeText = timeLabels[departureTime] || "sáng sớm";
     const retTimeText = timeLabels[returnTime] || "buổi chiều";
 
+    // Calculate per-day budget target
+    const budgetRanges: Record<string, { min: number; max: number }> = {
+      "dưới 500K": { min: 300, max: 500 },
+      "500K-1 triệu": { min: 500, max: 1000 },
+      "1-2 triệu": { min: 1000, max: 2000 },
+      "2-3 triệu": { min: 2000, max: 3000 },
+      "3-5 triệu": { min: 3000, max: 5000 },
+      "5-8 triệu": { min: 5000, max: 8000 },
+      "8-12 triệu": { min: 8000, max: 12000 },
+      "trên 12 triệu": { min: 12000, max: 20000 },
+    };
+    const range = budgetRanges[budgetText] || { min: 3000, max: 5000 };
+    const totalBudgetMin = range.min; // in K VND per person
+    const totalBudgetMax = range.max;
+    const perDayMin = Math.round(totalBudgetMin / numDays);
+    const perDayMax = Math.round(totalBudgetMax / numDays);
+
     const systemPrompt = `Bạn là ChipTrip AI - trợ lý du lịch Việt Nam chuyên nghiệp. 
 Tạo lịch trình du lịch chi tiết, thực tế với các địa điểm CÓ THẬT tại Việt Nam.
 Mỗi hoạt động phải có: tên quán/địa điểm thật, địa chỉ thật, giá ước tính thực tế bằng VNĐ.
 Trả về JSON thuần túy, KHÔNG markdown, KHÔNG backtick.`;
 
     const userPrompt = `Tạo lịch trình du lịch ${destination} cho ${travelers} người, ${numDays} ngày (từ ${startDate} đến ${endDate}).
-Ngân sách: ${budgetText} VNĐ/người.
+
+NGÂN SÁCH CỰC KỲ QUAN TRỌNG - BẮT BUỘC TUÂN THỦ:
+- Tổng ngân sách cho TOÀN BỘ chuyến đi: ${budgetText} VNĐ/người
+- Mỗi ngày chi tiêu khoảng ${perDayMin}K - ${perDayMax}K VNĐ/người
+- TỔNG chi phí tất cả hoạt động trong ${numDays} ngày PHẢI nằm trong khoảng ${totalBudgetMin}K - ${totalBudgetMax}K VNĐ
+- totalCost trong JSON phải phản ánh đúng tổng chi phí thực tế
+- Chọn khách sạn, nhà hàng, phương tiện PHÙ HỢP với mức ngân sách này
+- Nếu ngân sách thấp: ưu tiên homestay, quán ăn bình dân, xe bus, grab
+- Nếu ngân sách cao: có thể chọn resort, nhà hàng sang, taxi, máy bay
+
 Phong cách: ${stylesText}.
 Thời gian khởi hành: ${depTimeText}.
 Thời gian về: ${retTimeText}.
@@ -92,14 +118,13 @@ Trả về JSON đúng format sau (KHÔNG có markdown, KHÔNG có backtick):
 Yêu cầu:
 - Mỗi ngày có 4-6 hoạt động (sáng, trưa, chiều, tối)
 - Bao gồm: nơi ở, ăn uống, tham quan, cafe VÀ PHƯƠNG TIỆN DI CHUYỂN
-- QUAN TRỌNG: Ngày đầu tiên PHẢI có hoạt động di chuyển đến ${destination} (bookingType: "transport"), ví dụ: xe limousine, máy bay, tàu hỏa, xe khách
+- QUAN TRỌNG: Ngày đầu tiên PHẢI có hoạt động di chuyển đến ${destination} (bookingType: "transport")
 - Ngày cuối PHẢI có hoạt động di chuyển về (bookingType: "transport")
-- Giữa các điểm tham quan xa nhau cần thêm phương tiện di chuyển (grab, taxi, xe máy thuê, xe bus...)
+- Giữa các điểm tham quan xa nhau cần thêm phương tiện di chuyển
 - Địa điểm và quán ăn phải CÓ THẬT, nổi tiếng tại ${destination}
-- Giá phải thực tế theo thị trường Việt Nam
 - Chi phí dùng format: "200K", "1.2M", "Miễn phí"
+- KIỂM TRA LẠI: tổng cost tất cả items phải = khoảng ${totalBudgetMin}K-${totalBudgetMax}K
 - bookingType phải là một trong: hotel, restaurant, attraction, cafe, transport
-- Các hoạt động transport phải ghi rõ phương tiện, hãng xe/hãng bay cụ thể nếu có
 - Tips phải thực sự hữu ích cho du khách`;
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
