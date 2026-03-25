@@ -75,6 +75,22 @@ const SavedPlans = () => {
     setEditingId(null);
   };
 
+  const handleShareTrip = async (id: string, title: string) => {
+    const token = crypto.randomUUID().replace(/-/g, "").slice(0, 12);
+    const { data: existing } = await supabase.from("trips").select("share_token").eq("id", id).maybeSingle();
+    let shareToken = (existing as any)?.share_token;
+    if (!shareToken) {
+      const { error } = await supabase.from("trips").update({ share_token: token } as any).eq("id", id);
+      if (error) { toast.error("Không thể tạo link chia sẻ"); return; }
+      shareToken = token;
+    }
+    const shareUrl = `${window.location.origin}/result?shared=${shareToken}`;
+    try {
+      if (navigator.share) await navigator.share({ title, text: `Xem lịch trình ${title} trên Chip Trip! 🐥`, url: shareUrl });
+      else { await navigator.clipboard.writeText(shareUrl); toast.success("Đã sao chép link chia sẻ!"); }
+    } catch { /* cancelled */ }
+  };
+
   const getImage = (trip: TripPlan) => {
     return trip.image || trip.days?.[0]?.items?.[0]?.image || getPlaceImage(trip.destination || trip.title, "attraction", 600, 400);
   };
