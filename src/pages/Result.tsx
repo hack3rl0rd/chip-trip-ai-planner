@@ -266,6 +266,7 @@ const Result = () => {
             </div>
           </div>
         )}
+        <div className="container mx-auto px-6">
           <div className="grid lg:grid-cols-5 gap-8">
             {/* Left - Map */}
             <div className="lg:col-span-2">
