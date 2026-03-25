@@ -459,41 +459,7 @@ const Planning = () => {
             />
           </div>
 
-          {/* Budget */}
-          <div className="w-full max-w-md space-y-2">
-            <label className="text-sm font-medium text-foreground flex items-center gap-2">
-              <Wallet className="w-4 h-4" /> Ngân sách
-            </label>
-            <div className="flex gap-2">
-              {budgetPresets.map(p => (
-                <button key={p.label} onClick={() => setSuggestBudget([p.value])} className={`flex-1 flex flex-col items-center gap-1 px-3 py-3 rounded-xl border-2 transition-all ${suggestBudget[0] === p.value ? "border-chip-orange bg-chip-orange/10 text-chip-orange" : "border-border bg-card text-muted-foreground hover:border-chip-orange/40"}`}>
-                  <span className="text-xl">{p.emoji}</span>
-                  <span className="font-semibold text-xs">{p.label}</span>
-                  <span className="text-[10px]">{p.desc}</span>
-                </button>
-              ))}
-            </div>
-          </div>
 
-          {/* Duration */}
-          <div className="w-full max-w-md space-y-2">
-            <label className="text-sm font-medium text-foreground flex items-center gap-2">
-              <CalendarDays className="w-4 h-4" /> Bạn đi mấy ngày?
-            </label>
-            <div className="flex items-center gap-3">
-              <button onClick={() => setSuggestDays(Math.max(1, suggestDays - 1))} className="w-10 h-10 rounded-xl border-2 border-border bg-card flex items-center justify-center text-lg font-bold text-foreground hover:border-chip-orange transition-all">−</button>
-              <span className="text-3xl font-bold text-foreground w-12 text-center">{suggestDays}</span>
-              <span className="text-muted-foreground font-medium">ngày</span>
-              <button onClick={() => setSuggestDays(Math.min(14, suggestDays + 1))} className="w-10 h-10 rounded-xl border-2 border-border bg-card flex items-center justify-center text-lg font-bold text-foreground hover:border-chip-orange transition-all">+</button>
-              <div className="flex gap-1.5 ml-auto">
-                {[2, 3, 5, 7].map(n => (
-                  <button key={n} onClick={() => setSuggestDays(n)} className={`px-3 py-1.5 rounded-lg border-2 text-xs font-medium transition-all ${suggestDays === n ? "border-chip-orange bg-chip-orange/10 text-chip-orange" : "border-border bg-card text-muted-foreground hover:border-chip-orange/40"}`}>
-                    {n} ngày
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
 
           {/* Actions */}
           <div className="flex items-center gap-4">
