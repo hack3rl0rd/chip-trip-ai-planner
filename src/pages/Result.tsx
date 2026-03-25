@@ -486,17 +486,17 @@ const Result = () => {
                                 </div>
                                 <h4 className={`font-semibold text-foreground truncate ${isCompleted ? "line-through" : ""}`}>{item.title}</h4>
                                 <p className="text-sm text-muted-foreground">{item.desc}</p>
-                                <div className="flex items-center gap-2 mt-2">
+                                <div className="flex items-center gap-2 mt-2 flex-wrap">
                                   <button onClick={(e) => handleBooking(e, item)} className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-chip-yellow-light hover:bg-chip-orange/10 border border-chip-yellow/30 text-xs font-semibold text-chip-orange transition-all hover:shadow-warm">
                                     <BookingIcon className="w-3 h-3" /> {bookingLabel} <ExternalLink className="w-3 h-3" />
                                   </button>
-                                  <div className="hidden group-hover/item:flex items-center gap-1">
-                                    <button onClick={(e) => { e.stopPropagation(); setSwapModal({ open: true, item, dayIdx: activeDay, itemIdx: idx }); }} className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-muted hover:bg-chip-orange/10 border border-border text-xs font-medium text-muted-foreground hover:text-chip-orange transition-all" title="Đổi">
-                                      <RefreshCw className="w-3 h-3" />
-                                    </button>
-                                    <button onClick={(e) => { e.stopPropagation(); handleDeleteItem(activeDay, idx); }} className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-muted hover:bg-destructive/10 border border-border text-xs font-medium text-muted-foreground hover:text-destructive transition-all" title="Xóa">
-                                      <Trash2 className="w-3 h-3" />
-                                    </button>
+                                  <button onClick={(e) => { e.stopPropagation(); setSwapModal({ open: true, item, dayIdx: activeDay, itemIdx: idx }); }} className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-muted hover:bg-chip-orange/10 border border-border text-xs font-medium text-muted-foreground hover:text-chip-orange transition-all" title="Đổi">
+                                    <RefreshCw className="w-3 h-3" /> Đổi
+                                  </button>
+                                  <button onClick={(e) => { e.stopPropagation(); handleDeleteItem(activeDay, idx); }} className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-muted hover:bg-destructive/10 border border-border text-xs font-medium text-muted-foreground hover:text-destructive transition-all" title="Xóa">
+                                    <Trash2 className="w-3 h-3" /> Xóa
+                                  </button>
+                                  <div className="flex items-center gap-0.5">
                                     <button onClick={(e) => { e.stopPropagation(); handleMoveItem(activeDay, idx, "up"); }} disabled={idx === 0} className="inline-flex items-center px-1.5 py-1 rounded-lg bg-muted hover:bg-chip-orange/10 border border-border text-xs text-muted-foreground hover:text-chip-orange disabled:opacity-30 transition-all" title="Lên">
                                       <ArrowUp className="w-3 h-3" />
                                     </button>
