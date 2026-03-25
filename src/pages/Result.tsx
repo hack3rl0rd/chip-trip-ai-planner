@@ -158,23 +158,43 @@ const Result = () => {
   const handleShare = async () => {
     if (!dbTripId) { toast.error("Vui lòng lưu lịch trình trước khi chia sẻ"); return; }
     
-    // Generate share token if not exists
-    const token = crypto.randomUUID().replace(/-/g, "").slice(0, 12);
-    const { data: existing } = await supabase.from("trips").select("share_token").eq("id", dbTripId).maybeSingle();
-    
-    let shareToken = (existing as any)?.share_token;
-    if (!shareToken) {
-      const { error } = await supabase.from("trips").update({ share_token: token } as any).eq("id", dbTripId);
-      if (error) { toast.error("Không thể tạo link chia sẻ"); return; }
-      shareToken = token;
-    }
-    
-    const shareUrl = `${window.location.origin}/result?shared=${shareToken}`;
-    const shareData = { title: trip!.title, text: `Xem lịch trình ${trip!.title} trên Chip Trip! 🐥`, url: shareUrl };
     try {
-      if (navigator.share) await navigator.share(shareData);
-      else { await navigator.clipboard.writeText(`${shareData.text}\n${shareData.url}`); toast.success("Đã sao chép link chia sẻ!"); }
-    } catch { /* cancelled */ }
+      // Check if share_token already exists
+      const { data: existing, error: fetchErr } = await supabase
+        .from("trips")
+        .select("*")
+        .eq("id", dbTripId)
+        .maybeSingle();
+      
+      if (fetchErr) { console.error("Fetch error:", fetchErr); toast.error("Lỗi khi tạo link chia sẻ"); return; }
+      
+      let shareToken = (existing as any)?.share_token;
+      
+      if (!shareToken) {
+        const token = crypto.randomUUID().replace(/-/g, "").slice(0, 12);
+        const { error: updateErr } = await supabase
+          .from("trips")
+          .update({ share_token: token } as any)
+          .eq("id", dbTripId);
+        
+        if (updateErr) { console.error("Update error:", updateErr); toast.error("Không thể tạo link chia sẻ"); return; }
+        shareToken = token;
+      }
+      
+      const shareUrl = `${window.location.origin}/result?shared=${shareToken}`;
+      
+      if (navigator.share) {
+        await navigator.share({ title: trip!.title, text: `Xem lịch trình ${trip!.title} trên Chip Trip! 🐥`, url: shareUrl });
+      } else {
+        await navigator.clipboard.writeText(shareUrl);
+        toast.success("Đã sao chép link chia sẻ!", { description: shareUrl });
+      }
+    } catch (err: any) {
+      if (err?.name !== "AbortError") {
+        console.error("Share error:", err);
+        toast.error("Lỗi khi chia sẻ");
+      }
+    }
   };
 
   const handleItemClick = (item: TripItem) => { navigate("/location", { state: { item } }); };
