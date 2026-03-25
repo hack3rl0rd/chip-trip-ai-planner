@@ -31,7 +31,7 @@ const Result = () => {
   const [searchParams] = useSearchParams();
   const { user, profile } = useAuth();
   const [saved, setSaved] = useState(false);
-  const [editMode, setEditMode] = useState(false);
+  const [editMode] = useState(false);
   const [swapModal, setSwapModal] = useState<{ open: boolean; item: TripItem | null; dayIdx: number; itemIdx: number }>({ open: false, item: null, dayIdx: 0, itemIdx: 0 });
   const [loadingTrip, setLoadingTrip] = useState(false);
   const [dbTripId, setDbTripId] = useState<string | null>(null);
@@ -397,10 +397,6 @@ const Result = () => {
                     <div className="flex gap-2 flex-wrap">
                       {dbTripId && <GroupPanel tripId={dbTripId} isOwner={true} />}
                       {dbTripId && <SplitBill tripId={dbTripId} memberNames={user ? { [user.id]: profile?.display_name || user.email?.split("@")[0] || "Bạn" } : {}} travelerCount={trip?.days?.[0]?.items ? undefined : 2} />}
-                      <Button variant={editMode ? "hero" : "soft"} size="sm" onClick={() => setEditMode(!editMode)}>
-                        {editMode ? <Check className="w-4 h-4" /> : <GripVertical className="w-4 h-4" />}
-                        {editMode ? "Xong" : "Sửa"}
-                      </Button>
                     </div>
                   )}
                 </div>
@@ -454,8 +450,8 @@ const Result = () => {
                           return (
                             <div
                               key={idx}
-                              onClick={() => !editMode && handleItemClick(item)}
-                              className={`relative flex gap-4 bg-card rounded-xl p-4 border border-border shadow-card hover:shadow-warm transition-all ml-4 ${editMode ? "" : "cursor-pointer hover:-translate-y-0.5"} group/item ${isCompleted ? "opacity-60" : ""}`}
+                              onClick={() => handleItemClick(item)}
+                              className={`relative flex gap-4 bg-card rounded-xl p-4 border border-border shadow-card hover:shadow-warm transition-all ml-4 cursor-pointer hover:-translate-y-0.5 group/item ${isCompleted ? "opacity-60" : ""}`}
                             >
                               <div className={`absolute -left-[1.6rem] top-5 w-3 h-3 rounded-full border-2 border-background ${isCompleted ? "bg-green-500" : "bg-chip-orange"}`} />
 
@@ -471,12 +467,6 @@ const Result = () => {
                                 {isCompleted && <Check className="w-3.5 h-3.5" />}
                               </button>
 
-                              {editMode && (
-                                <div className="flex flex-col gap-1 flex-shrink-0">
-                                  <button onClick={(e) => { e.stopPropagation(); handleMoveItem(activeDay, idx, "up"); }} disabled={idx === 0} className="w-7 h-7 rounded-lg flex items-center justify-center bg-muted hover:bg-chip-orange/10 text-muted-foreground hover:text-chip-orange disabled:opacity-30 transition-all text-xs">▲</button>
-                                  <button onClick={(e) => { e.stopPropagation(); handleMoveItem(activeDay, idx, "down"); }} disabled={idx === trip.days[activeDay].items.length - 1} className="w-7 h-7 rounded-lg flex items-center justify-center bg-muted hover:bg-chip-orange/10 text-muted-foreground hover:text-chip-orange disabled:opacity-30 transition-all text-xs">▼</button>
-                                </div>
-                              )}
 
                               <img src={item.image && item.image !== "/placeholder.svg" ? item.image : getPlaceImage(item.title, item.bookingType)} alt={item.title} className={`w-16 h-16 rounded-xl object-cover flex-shrink-0 ${isCompleted ? "grayscale" : ""}`} />
                               <div className="flex-1 min-w-0">
@@ -486,17 +476,17 @@ const Result = () => {
                                 </div>
                                 <h4 className={`font-semibold text-foreground truncate ${isCompleted ? "line-through" : ""}`}>{item.title}</h4>
                                 <p className="text-sm text-muted-foreground">{item.desc}</p>
-                                <div className="flex items-center gap-2 mt-2">
+                                <div className="flex items-center gap-2 mt-2 flex-wrap">
                                   <button onClick={(e) => handleBooking(e, item)} className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-chip-yellow-light hover:bg-chip-orange/10 border border-chip-yellow/30 text-xs font-semibold text-chip-orange transition-all hover:shadow-warm">
                                     <BookingIcon className="w-3 h-3" /> {bookingLabel} <ExternalLink className="w-3 h-3" />
                                   </button>
-                                  <div className="hidden group-hover/item:flex items-center gap-1">
-                                    <button onClick={(e) => { e.stopPropagation(); setSwapModal({ open: true, item, dayIdx: activeDay, itemIdx: idx }); }} className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-muted hover:bg-chip-orange/10 border border-border text-xs font-medium text-muted-foreground hover:text-chip-orange transition-all" title="Đổi">
-                                      <RefreshCw className="w-3 h-3" />
-                                    </button>
-                                    <button onClick={(e) => { e.stopPropagation(); handleDeleteItem(activeDay, idx); }} className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-muted hover:bg-destructive/10 border border-border text-xs font-medium text-muted-foreground hover:text-destructive transition-all" title="Xóa">
-                                      <Trash2 className="w-3 h-3" />
-                                    </button>
+                                  <button onClick={(e) => { e.stopPropagation(); setSwapModal({ open: true, item, dayIdx: activeDay, itemIdx: idx }); }} className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-muted hover:bg-chip-orange/10 border border-border text-xs font-medium text-muted-foreground hover:text-chip-orange transition-all" title="Đổi">
+                                    <RefreshCw className="w-3 h-3" /> Đổi
+                                  </button>
+                                  <button onClick={(e) => { e.stopPropagation(); handleDeleteItem(activeDay, idx); }} className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-muted hover:bg-destructive/10 border border-border text-xs font-medium text-muted-foreground hover:text-destructive transition-all" title="Xóa">
+                                    <Trash2 className="w-3 h-3" /> Xóa
+                                  </button>
+                                  <div className="flex items-center gap-0.5">
                                     <button onClick={(e) => { e.stopPropagation(); handleMoveItem(activeDay, idx, "up"); }} disabled={idx === 0} className="inline-flex items-center px-1.5 py-1 rounded-lg bg-muted hover:bg-chip-orange/10 border border-border text-xs text-muted-foreground hover:text-chip-orange disabled:opacity-30 transition-all" title="Lên">
                                       <ArrowUp className="w-3 h-3" />
                                     </button>
@@ -560,12 +550,22 @@ const Result = () => {
         </div>
       </div>
 
-      {/* Mascot */}
+      {/* Mascot with countdown */}
       <ChipMascot
-        storageKey="chip-result-welcome"
+        storageKey={`chip-result-${dbTripId || "new"}`}
+        countdown={trip.days[0]?.date ? { label: "Còn lại trước chuyến đi", targetDate: trip.days[0].date } : undefined}
         messages={[
-          { text: "Lịch trình xịn quá! Lưu lại để không mất nha 🐤", delay: 1500 },
-          { text: "Thêm bạn bè vào nhóm để chia tiền dễ hơn!", delay: 10000 },
+          { 
+            text: saved 
+              ? `Lịch trình "${trip.destination}" đã lưu! Bấm bên dưới để xem lại bất cứ lúc nào 🐤`
+              : "Lịch trình xịn quá! Lưu lại để không mất nha 🐤",
+            delay: 1500,
+            action: saved 
+              ? { label: "Xem chuyến đi đã lưu", onClick: () => navigate("/saved") }
+              : { label: "Lưu ngay", onClick: handleSave }
+          },
+          { text: "Bấm vào hoạt động để xem chi tiết, hoặc dùng nút Đổi / Xóa để chỉnh sửa nhanh! ✏️", delay: 10000 },
+          { text: "Thêm bạn bè vào nhóm để chia tiền dễ hơn!", delay: 15000 },
         ]}
       />
 
