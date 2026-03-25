@@ -165,6 +165,9 @@ const SavedPlans = () => {
                         <Button variant="soft" size="sm" className="flex-1" onClick={() => navigate(`/result?id=${id}`, { state: { trip } })}>
                           <Eye className="w-3.5 h-3.5" /> Xem lại
                         </Button>
+                        <Button variant="outline" size="sm" onClick={() => handleShareTrip(id, trip.title)} title="Chia sẻ">
+                          <Share2 className="w-3.5 h-3.5" />
+                        </Button>
                         <AlertDialog>
                           <AlertDialogTrigger asChild>
                             <Button variant="outline" size="sm"><Trash2 className="w-3.5 h-3.5" /></Button>
