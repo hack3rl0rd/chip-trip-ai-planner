@@ -86,14 +86,17 @@ const Planning = () => {
     try {
       const { data, error } = await supabase.functions.invoke("generate-trip", {
         body: {
+          origin,
           destination,
+          tripType,
           startDate: dates.start,
-          endDate: dates.end,
+          endDate: tripType === "roundtrip" ? dates.end : dates.start,
           departureTime,
-          returnTime,
+          returnTime: tripType === "roundtrip" ? returnTime : undefined,
           budget: budget[0],
           styles,
           travelers,
+          tickets,
         },
       });
 
