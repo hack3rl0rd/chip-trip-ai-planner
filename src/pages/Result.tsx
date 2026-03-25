@@ -487,24 +487,34 @@ const Result = () => {
       {/* Floating Action Bar */}
       <div className="fixed bottom-0 left-0 right-0 z-40 bg-card/80 backdrop-blur-lg border-t border-border">
         <div className="container mx-auto px-6 py-3 flex items-center justify-center gap-3">
-          <Button variant={saved ? "soft" : "hero"} size="sm" onClick={handleSave} disabled={saved} className="gap-1.5">
-            {saved ? <Check className="w-4 h-4" /> : <Bookmark className="w-4 h-4" />}
-            {saved ? "Đã lưu" : "Lưu"}
-          </Button>
-          {dbTripId && (
-            <SplitBill tripId={dbTripId} memberNames={user ? { [user.id]: profile?.display_name || user.email?.split("@")[0] || "Bạn" } : {}} />
+          {isSharedView ? (
+            <>
+              <Button variant="hero" size="sm" onClick={handleClone} className="gap-1.5">
+                <Copy className="w-4 h-4" /> Clone về tài khoản
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button variant={saved ? "soft" : "hero"} size="sm" onClick={handleSave} disabled={saved} className="gap-1.5">
+                {saved ? <Check className="w-4 h-4" /> : <Bookmark className="w-4 h-4" />}
+                {saved ? "Đã lưu" : "Lưu"}
+              </Button>
+              {dbTripId && (
+                <SplitBill tripId={dbTripId} memberNames={user ? { [user.id]: profile?.display_name || user.email?.split("@")[0] || "Bạn" } : {}} />
+              )}
+              <Button variant="soft" size="sm" onClick={handleShare} className="gap-1.5">
+                <Share2 className="w-4 h-4" /> Chia sẻ
+              </Button>
+              <ExportDialog trip={trip} dbTripId={dbTripId}>
+                <Button variant="soft" size="sm" className="gap-1.5">
+                  <Download className="w-4 h-4" /> Xuất
+                </Button>
+              </ExportDialog>
+              <Button variant="soft" size="sm" onClick={handleClone} className="gap-1.5">
+                <Copy className="w-4 h-4" /> Clone
+              </Button>
+            </>
           )}
-          <Button variant="soft" size="sm" onClick={handleShare} className="gap-1.5">
-            <Share2 className="w-4 h-4" /> Chia sẻ
-          </Button>
-          <ExportDialog trip={trip} dbTripId={dbTripId}>
-            <Button variant="soft" size="sm" className="gap-1.5">
-              <Download className="w-4 h-4" /> Xuất
-            </Button>
-          </ExportDialog>
-          <Button variant="soft" size="sm" onClick={handleClone} className="gap-1.5">
-            <Copy className="w-4 h-4" /> Clone
-          </Button>
         </div>
       </div>
 

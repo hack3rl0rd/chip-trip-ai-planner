@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
-import { Calendar, Eye, Trash2, Plus, Pencil, Check, X, Loader2 } from "lucide-react";
+import { Calendar, Eye, Trash2, Plus, Pencil, Check, X, Loader2, Share2 } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import Navbar from "@/components/Navbar";
 import { type TripPlan } from "@/lib/trip-data";
