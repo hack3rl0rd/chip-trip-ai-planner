@@ -77,23 +77,58 @@ const SavedPlans = () => {
 
   const handleShareTrip = async (id: string, title: string) => {
     try {
-      const { data: existing } = await supabase.from("trips").select("*").eq("id", id).maybeSingle();
+      const { data: existing, error: fetchErr } = await supabase
+        .from("trips")
+        .select("*")
+        .eq("id", id)
+        .maybeSingle();
+
+      if (fetchErr) {
+        console.error("Fetch error:", fetchErr);
+        toast.error("Lỗi khi tạo link chia sẻ");
+        return;
+      }
+
       let shareToken = (existing as any)?.share_token;
+
       if (!shareToken) {
         const token = crypto.randomUUID().replace(/-/g, "").slice(0, 12);
         const { error } = await supabase.from("trips").update({ share_token: token } as any).eq("id", id);
-        if (error) { toast.error("Không thể tạo link chia sẻ"); return; }
+        if (error) {
+          console.error("Update error:", error);
+          toast.error("Không thể tạo link chia sẻ");
+          return;
+        }
         shareToken = token;
       }
+
       const shareUrl = `${window.location.origin}/result?shared=${shareToken}`;
-      if (navigator.share) {
-        await navigator.share({ title, text: `Xem lịch trình ${title} trên Chip Trip! 🐥`, url: shareUrl });
-      } else {
+      const sharePayload = {
+        title,
+        text: `Xem lịch trình ${title} trên Chip Trip! 🐥`,
+        url: shareUrl,
+      };
+
+      if (navigator.share && (!navigator.canShare || navigator.canShare({ url: shareUrl }))) {
+        try {
+          await navigator.share(sharePayload);
+          return;
+        } catch (err: any) {
+          if (err?.name === "AbortError") return;
+          console.warn("Web Share failed, falling back to clipboard:", err);
+        }
+      }
+
+      try {
         await navigator.clipboard.writeText(shareUrl);
         toast.success("Đã sao chép link chia sẻ!", { description: shareUrl });
+      } catch (clipboardErr) {
+        console.error("Clipboard error:", clipboardErr);
+        window.prompt("Copy link lịch trình:", shareUrl);
       }
-    } catch (err: any) {
-      if (err?.name !== "AbortError") toast.error("Lỗi khi chia sẻ");
+    } catch (err) {
+      console.error("Share error:", err);
+      toast.error("Lỗi khi tạo link chia sẻ");
     }
   };
 
