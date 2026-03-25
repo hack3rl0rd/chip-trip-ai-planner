@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { MapPin, Clock, Wallet, Star, Bookmark, Share2, Check, Download, ExternalLink, Hotel, UtensilsCrossed, Ticket, Coffee, Copy, Trash2, GripVertical, RefreshCw, Loader2, ChevronDown, ChevronUp, ArrowUp, ArrowDown } from "lucide-react";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { toast } from "sonner";
 import Navbar from "@/components/Navbar";
 import { generateTrip, generatePackingList, type TripPlan, type TripItem } from "@/lib/trip-data";
@@ -40,6 +40,16 @@ const Result = () => {
   const [allExpanded, setAllExpanded] = useState(false);
   const [completedItems, setCompletedItems] = useState<Set<string>>(new Set());
   const [activeDay, setActiveDay] = useState(0);
+  const dayTabsRef = useRef<HTMLDivElement>(null);
+  const dayButtonRefs = useRef<(HTMLButtonElement | null)[]>([]);
+
+  const handleDayClick = useCallback((dayIdx: number) => {
+    setActiveDay(dayIdx);
+    const btn = dayButtonRefs.current[dayIdx];
+    if (btn) {
+      btn.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
+    }
+  }, []);
 
   // Initialize expanded days - first 3 open by default
   useEffect(() => {
@@ -299,7 +309,7 @@ const Result = () => {
                   {/* Minimal header actions - main actions in floating bar */}
                   <div className="flex gap-2 flex-wrap">
                     {dbTripId && <GroupPanel tripId={dbTripId} isOwner={true} />}
-                    {dbTripId && <SplitBill tripId={dbTripId} memberNames={user ? { [user.id]: profile?.display_name || user.email?.split("@")[0] || "Bạn" } : {}} />}
+                    {dbTripId && <SplitBill tripId={dbTripId} memberNames={user ? { [user.id]: profile?.display_name || user.email?.split("@")[0] || "Bạn" } : {}} travelerCount={trip?.days?.[0]?.items ? undefined : 2} />}
                     <Button variant={editMode ? "hero" : "soft"} size="sm" onClick={() => setEditMode(!editMode)}>
                       {editMode ? <Check className="w-4 h-4" /> : <GripVertical className="w-4 h-4" />}
                       {editMode ? "Xong" : "Sửa"}
@@ -316,14 +326,15 @@ const Result = () => {
 
                 <TabsContent value="itinerary" className="space-y-4 mt-4">
                   {/* Horizontal day tabs */}
-                  <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-none">
+                  <div ref={dayTabsRef} className="flex gap-2 overflow-x-auto pb-2 scrollbar-none">
                     {trip.days.map((day, dayIdx) => {
                       const completedCount = day.items.filter((_, idx) => completedItems.has(`${dayIdx}-${idx}`)).length;
                       const allDone = completedCount === day.items.length && day.items.length > 0;
                       return (
                         <button
                           key={dayIdx}
-                          onClick={() => setActiveDay(dayIdx)}
+                          ref={(el) => { dayButtonRefs.current[dayIdx] = el; }}
+                          onClick={() => handleDayClick(dayIdx)}
                           className={`flex-shrink-0 flex items-center gap-2 px-4 py-2.5 rounded-xl border-2 transition-all text-sm font-medium ${
                             activeDay === dayIdx
                               ? "border-chip-orange bg-chip-orange/10 text-chip-orange shadow-warm"

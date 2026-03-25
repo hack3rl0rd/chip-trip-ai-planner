@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Receipt, Plus, Trash2, ArrowRight, ChevronDown, ChevronUp, Check } from "lucide-react";
+import { Receipt, Plus, Trash2, ArrowRight, ChevronDown, ChevronUp, Pencil, Check, UserPlus, X } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -15,7 +15,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 
 interface SplitBillProps {
   tripId: string;
-  memberNames: Record<string, string>; // userId -> displayName
+  memberNames: Record<string, string>;
+  travelerCount?: number;
 }
 
 interface Expense {
@@ -26,6 +27,11 @@ interface Expense {
   category: string;
   split_among: string[];
   created_at: string;
+}
+
+interface Member {
+  id: string;
+  name: string;
 }
 
 const categoryLabels: Record<string, { label: string; emoji: string }> = {
@@ -43,12 +49,31 @@ const formatAmount = (n: number) => {
   return `${n}`;
 };
 
-const SplitBill = ({ tripId, memberNames }: SplitBillProps) => {
+const SplitBill = ({ tripId, memberNames, travelerCount = 2 }: SplitBillProps) => {
   const { user } = useAuth();
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [open, setOpen] = useState(false);
   const [adding, setAdding] = useState(false);
   const [showSummary, setShowSummary] = useState(false);
+  const [editingMemberId, setEditingMemberId] = useState<string | null>(null);
+  const [editingName, setEditingName] = useState("");
+  const [showMembers, setShowMembers] = useState(false);
+
+  // Initialize members: default "Người 1", "Người 2", etc.
+  const [members, setMembers] = useState<Member[]>(() => {
+    const count = Math.max(travelerCount, Object.keys(memberNames).length, 2);
+    const initial: Member[] = [];
+    // Add real members first
+    Object.entries(memberNames).forEach(([uid, name], i) => {
+      initial.push({ id: uid, name: name || `Người ${i + 1}` });
+    });
+    // Fill up to traveler count
+    for (let i = initial.length; i < count; i++) {
+      initial.push({ id: `person-${i + 1}`, name: `Người ${i + 1}` });
+    }
+    return initial;
+  });
+
   const [form, setForm] = useState({
     title: "",
     amount: "",
@@ -56,8 +81,6 @@ const SplitBill = ({ tripId, memberNames }: SplitBillProps) => {
     paid_by: "",
     split_among: [] as string[],
   });
-
-  const memberIds = Object.keys(memberNames);
 
   const fetchExpenses = async () => {
     const { data } = await supabase
@@ -72,8 +95,11 @@ const SplitBill = ({ tripId, memberNames }: SplitBillProps) => {
     setOpen(isOpen);
     if (isOpen) {
       fetchExpenses();
-      // Reset form with current user as default payer
-      setForm(f => ({ ...f, paid_by: user?.id || "", split_among: memberIds.length > 0 ? [...memberIds] : [user?.id || ""] }));
+      setForm(f => ({
+        ...f,
+        paid_by: members[0]?.id || "",
+        split_among: members.map(m => m.id),
+      }));
     }
   };
 
@@ -87,8 +113,39 @@ const SplitBill = ({ tripId, memberNames }: SplitBillProps) => {
   };
 
   const selectAllMembers = () => {
-    const allIds = memberIds.length > 0 ? memberIds : [user?.id || ""];
-    setForm(f => ({ ...f, split_among: [...allIds] }));
+    setForm(f => ({ ...f, split_among: members.map(m => m.id) }));
+  };
+
+  const addMember = () => {
+    const newId = `person-${Date.now()}`;
+    const newName = `Người ${members.length + 1}`;
+    setMembers(prev => [...prev, { id: newId, name: newName }]);
+    setForm(f => ({ ...f, split_among: [...f.split_among, newId] }));
+  };
+
+  const removeMember = (id: string) => {
+    if (members.length <= 2) {
+      toast.error("Cần ít nhất 2 người");
+      return;
+    }
+    setMembers(prev => prev.filter(m => m.id !== id));
+    setForm(f => ({
+      ...f,
+      paid_by: f.paid_by === id ? members[0]?.id || "" : f.paid_by,
+      split_among: f.split_among.filter(uid => uid !== id),
+    }));
+  };
+
+  const startRename = (member: Member) => {
+    setEditingMemberId(member.id);
+    setEditingName(member.name);
+  };
+
+  const confirmRename = () => {
+    if (!editingMemberId || !editingName.trim()) return;
+    setMembers(prev => prev.map(m => m.id === editingMemberId ? { ...m, name: editingName.trim() } : m));
+    setEditingMemberId(null);
+    setEditingName("");
   };
 
   const addExpense = async () => {
@@ -103,7 +160,7 @@ const SplitBill = ({ tripId, memberNames }: SplitBillProps) => {
       return;
     }
 
-    const paidBy = form.paid_by || user.id;
+    const paidBy = form.paid_by || members[0]?.id || user.id;
 
     const { error } = await supabase.from("trip_expenses").insert({
       trip_id: tripId,
@@ -118,7 +175,7 @@ const SplitBill = ({ tripId, memberNames }: SplitBillProps) => {
       toast.error("Thêm chi phí thất bại");
     } else {
       toast.success("Đã thêm chi phí");
-      setForm({ title: "", amount: "", category: "food", paid_by: user.id, split_among: memberIds.length > 0 ? [...memberIds] : [user.id] });
+      setForm({ title: "", amount: "", category: "food", paid_by: members[0]?.id || "", split_among: members.map(m => m.id) });
       setAdding(false);
       fetchExpenses();
     }
@@ -130,14 +187,18 @@ const SplitBill = ({ tripId, memberNames }: SplitBillProps) => {
     toast.success("Đã xóa");
   };
 
+  const getName = (uid: string) => {
+    const member = members.find(m => m.id === uid);
+    if (member) return member.name;
+    return memberNames[uid] || uid.slice(0, 6) + "...";
+  };
+
   // Calculate balances & settlements
   const calculateDebts = () => {
     const balances: Record<string, number> = {};
-
     expenses.forEach(exp => {
       const splitWith = exp.split_among.length > 0 ? exp.split_among : [exp.paid_by];
       const perPerson = exp.amount / splitWith.length;
-
       balances[exp.paid_by] = (balances[exp.paid_by] || 0) + exp.amount;
       splitWith.forEach(uid => {
         balances[uid] = (balances[uid] || 0) - perPerson;
@@ -146,7 +207,6 @@ const SplitBill = ({ tripId, memberNames }: SplitBillProps) => {
 
     const debtors: { id: string; amount: number }[] = [];
     const creditors: { id: string; amount: number }[] = [];
-
     Object.entries(balances).forEach(([id, balance]) => {
       if (balance < -0.01) debtors.push({ id, amount: -balance });
       else if (balance > 0.01) creditors.push({ id, amount: balance });
@@ -162,13 +222,12 @@ const SplitBill = ({ tripId, memberNames }: SplitBillProps) => {
       if (debtors[di].amount < 0.01) di++;
       if (creditors[ci].amount < 0.01) ci++;
     }
-
     return { settlements, balances };
   };
 
   const totalExpense = expenses.reduce((sum, e) => sum + e.amount, 0);
-  const { settlements, balances } = calculateDebts();
-  const getName = (uid: string) => memberNames[uid] || uid.slice(0, 6) + "...";
+  const { settlements } = calculateDebts();
+  const perPersonAvg = members.length > 0 ? Math.round(totalExpense / members.length) : 0;
 
   // Per-person totals
   const perPersonPaid: Record<string, number> = {};
@@ -181,8 +240,6 @@ const SplitBill = ({ tripId, memberNames }: SplitBillProps) => {
       perPersonOwes[uid] = (perPersonOwes[uid] || 0) + perPerson;
     });
   });
-
-  const allPeople = [...new Set([...Object.keys(perPersonPaid), ...Object.keys(perPersonOwes)])];
 
   return (
     <Dialog open={open} onOpenChange={handleOpen}>
@@ -199,11 +256,67 @@ const SplitBill = ({ tripId, memberNames }: SplitBillProps) => {
         </DialogHeader>
 
         <div className="space-y-4">
-          {/* Total */}
+          {/* Total + per person */}
           <div className="text-center p-4 rounded-xl bg-gradient-warm border border-chip-yellow/30">
             <p className="text-sm text-muted-foreground">Tổng chi tiêu</p>
             <p className="text-3xl font-bold text-gradient">{formatAmount(totalExpense)} VNĐ</p>
-            <p className="text-xs text-muted-foreground mt-1">{expenses.length} khoản · {allPeople.length} người</p>
+            <p className="text-xs text-muted-foreground mt-1">
+              {expenses.length} khoản · {members.length} người
+              {perPersonAvg > 0 && <> · ~<span className="font-semibold text-foreground">{formatAmount(perPersonAvg)} ₫</span>/người</>}
+            </p>
+          </div>
+
+          {/* Members management */}
+          <div className="space-y-2">
+            <button
+              onClick={() => setShowMembers(!showMembers)}
+              className="w-full flex items-center justify-between p-3 rounded-xl border border-border bg-card text-sm font-medium text-foreground hover:bg-muted/50 transition-colors"
+            >
+              <span>👥 Thành viên ({members.length})</span>
+              {showMembers ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+            </button>
+
+            {showMembers && (
+              <div className="space-y-1.5 p-3 rounded-xl border border-border bg-card">
+                {members.map((member) => (
+                  <div key={member.id} className="flex items-center gap-2 p-2 rounded-lg hover:bg-muted/50">
+                    {editingMemberId === member.id ? (
+                      <>
+                        <Input
+                          value={editingName}
+                          onChange={(e) => setEditingName(e.target.value)}
+                          onKeyDown={(e) => e.key === "Enter" && confirmRename()}
+                          className="h-8 text-sm flex-1"
+                          autoFocus
+                        />
+                        <button onClick={confirmRename} className="p-1.5 rounded-lg hover:bg-chip-orange/10 text-chip-orange">
+                          <Check className="w-3.5 h-3.5" />
+                        </button>
+                        <button onClick={() => setEditingMemberId(null)} className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground">
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <span className="flex-1 text-sm text-foreground">{member.name}</span>
+                        <button onClick={() => startRename(member)} className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors">
+                          <Pencil className="w-3 h-3" />
+                        </button>
+                        <button onClick={() => removeMember(member.id)} className="p-1.5 rounded-lg hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors">
+                          <Trash2 className="w-3 h-3" />
+                        </button>
+                      </>
+                    )}
+                  </div>
+                ))}
+                <button
+                  onClick={addMember}
+                  className="w-full flex items-center justify-center gap-1.5 p-2 rounded-lg border border-dashed border-border text-sm text-muted-foreground hover:text-chip-orange hover:border-chip-orange/40 transition-colors"
+                >
+                  <UserPlus className="w-3.5 h-3.5" /> Thêm người
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Settlements */}
@@ -221,26 +334,24 @@ const SplitBill = ({ tripId, memberNames }: SplitBillProps) => {
             </div>
           )}
 
-          {/* Detailed summary toggle */}
-          {allPeople.length > 0 && (
-            <button
-              onClick={() => setShowSummary(!showSummary)}
-              className="w-full flex items-center justify-between p-3 rounded-xl border border-border bg-card text-sm font-medium text-foreground hover:bg-muted/50 transition-colors"
-            >
-              <span>📊 Chi tiết từng người</span>
-              {showSummary ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-            </button>
-          )}
+          {/* Detailed summary */}
+          <button
+            onClick={() => setShowSummary(!showSummary)}
+            className="w-full flex items-center justify-between p-3 rounded-xl border border-border bg-card text-sm font-medium text-foreground hover:bg-muted/50 transition-colors"
+          >
+            <span>📊 Chi tiết từng người</span>
+            {showSummary ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+          </button>
 
           {showSummary && (
             <div className="space-y-2">
-              {allPeople.map(uid => {
-                const paid = perPersonPaid[uid] || 0;
-                const owes = Math.round(perPersonOwes[uid] || 0);
+              {members.map(member => {
+                const paid = perPersonPaid[member.id] || 0;
+                const owes = Math.round(perPersonOwes[member.id] || 0);
                 const balance = Math.round(paid - owes);
                 return (
-                  <div key={uid} className="p-3 rounded-xl border border-border bg-card space-y-1">
-                    <p className="text-sm font-semibold text-foreground">{getName(uid)}</p>
+                  <div key={member.id} className="p-3 rounded-xl border border-border bg-card space-y-1">
+                    <p className="text-sm font-semibold text-foreground">{member.name}</p>
                     <div className="flex justify-between text-xs text-muted-foreground">
                       <span>Đã trả: <span className="text-foreground font-medium">{formatAmount(paid)} ₫</span></span>
                       <span>Phải chịu: <span className="text-foreground font-medium">{formatAmount(owes)} ₫</span></span>
@@ -278,59 +389,48 @@ const SplitBill = ({ tripId, memberNames }: SplitBillProps) => {
               </Select>
 
               {/* Payer selection */}
-              {memberIds.length > 1 && (
-                <div className="space-y-1.5">
-                  <label className="text-xs font-medium text-muted-foreground">👤 Người trả tiền</label>
-                  <Select value={form.paid_by} onValueChange={v => setForm({ ...form, paid_by: v })}>
-                    <SelectTrigger><SelectValue placeholder="Chọn người trả" /></SelectTrigger>
-                    <SelectContent>
-                      {memberIds.map(uid => (
-                        <SelectItem key={uid} value={uid}>{getName(uid)}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
-
-              {/* Split among selection */}
-              {memberIds.length > 1 && (
-                <div className="space-y-1.5">
-                  <div className="flex items-center justify-between">
-                    <label className="text-xs font-medium text-muted-foreground">👥 Chia cho ai</label>
-                    <button
-                      type="button"
-                      onClick={selectAllMembers}
-                      className="text-xs text-chip-orange hover:underline"
-                    >
-                      Chọn tất cả
-                    </button>
-                  </div>
-                  <div className="space-y-1 max-h-32 overflow-y-auto">
-                    {memberIds.map(uid => (
-                      <label
-                        key={uid}
-                        className="flex items-center gap-2 p-2 rounded-lg hover:bg-muted/50 cursor-pointer text-sm"
-                      >
-                        <Checkbox
-                          checked={form.split_among.includes(uid)}
-                          onCheckedChange={() => toggleSplitMember(uid)}
-                        />
-                        <span className="text-foreground">{getName(uid)}</span>
-                        {form.split_among.includes(uid) && form.amount && (
-                          <span className="ml-auto text-xs text-muted-foreground">
-                            ~{formatAmount(Math.round(parseFloat(form.amount) / form.split_among.length))} ₫
-                          </span>
-                        )}
-                      </label>
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-muted-foreground">👤 Người trả tiền</label>
+                <Select value={form.paid_by} onValueChange={v => setForm({ ...form, paid_by: v })}>
+                  <SelectTrigger><SelectValue placeholder="Chọn người trả" /></SelectTrigger>
+                  <SelectContent>
+                    {members.map(m => (
+                      <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>
                     ))}
-                  </div>
-                  {form.split_among.length > 0 && form.amount && (
-                    <p className="text-xs text-muted-foreground">
-                      Mỗi người: <span className="font-medium text-foreground">{formatAmount(Math.round(parseFloat(form.amount) / form.split_among.length))} ₫</span>
-                    </p>
-                  )}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Split among */}
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-medium text-muted-foreground">👥 Chia cho ai</label>
+                  <button type="button" onClick={selectAllMembers} className="text-xs text-chip-orange hover:underline">
+                    Chọn tất cả
+                  </button>
                 </div>
-              )}
+                <div className="space-y-1 max-h-32 overflow-y-auto">
+                  {members.map(m => (
+                    <label key={m.id} className="flex items-center gap-2 p-2 rounded-lg hover:bg-muted/50 cursor-pointer text-sm">
+                      <Checkbox
+                        checked={form.split_among.includes(m.id)}
+                        onCheckedChange={() => toggleSplitMember(m.id)}
+                      />
+                      <span className="text-foreground">{m.name}</span>
+                      {form.split_among.includes(m.id) && form.amount && (
+                        <span className="ml-auto text-xs text-muted-foreground">
+                          ~{formatAmount(Math.round(parseFloat(form.amount) / form.split_among.length))} ₫
+                        </span>
+                      )}
+                    </label>
+                  ))}
+                </div>
+                {form.split_among.length > 0 && form.amount && (
+                  <p className="text-xs text-muted-foreground">
+                    Mỗi người: <span className="font-medium text-foreground">{formatAmount(Math.round(parseFloat(form.amount) / form.split_among.length))} ₫</span>
+                  </p>
+                )}
+              </div>
 
               <div className="flex gap-2">
                 <Button variant="hero" className="flex-1" onClick={addExpense}>Thêm</Button>
@@ -357,11 +457,9 @@ const SplitBill = ({ tripId, memberNames }: SplitBillProps) => {
                     </p>
                   </div>
                   <span className="text-sm font-bold text-foreground">{formatAmount(exp.amount)} ₫</span>
-                  {exp.paid_by === user?.id && (
-                    <button onClick={() => deleteExpense(exp.id)} className="p-1 rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive">
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  )}
+                  <button onClick={() => deleteExpense(exp.id)} className="p-1 rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive">
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
                 </div>
               );
             })}
