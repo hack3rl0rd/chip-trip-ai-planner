@@ -326,14 +326,15 @@ const Result = () => {
 
                 <TabsContent value="itinerary" className="space-y-4 mt-4">
                   {/* Horizontal day tabs */}
-                  <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-none">
+                  <div ref={dayTabsRef} className="flex gap-2 overflow-x-auto pb-2 scrollbar-none">
                     {trip.days.map((day, dayIdx) => {
                       const completedCount = day.items.filter((_, idx) => completedItems.has(`${dayIdx}-${idx}`)).length;
                       const allDone = completedCount === day.items.length && day.items.length > 0;
                       return (
                         <button
                           key={dayIdx}
-                          onClick={() => setActiveDay(dayIdx)}
+                          ref={(el) => { dayButtonRefs.current[dayIdx] = el; }}
+                          onClick={() => handleDayClick(dayIdx)}
                           className={`flex-shrink-0 flex items-center gap-2 px-4 py-2.5 rounded-xl border-2 transition-all text-sm font-medium ${
                             activeDay === dayIdx
                               ? "border-chip-orange bg-chip-orange/10 text-chip-orange shadow-warm"
