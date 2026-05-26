@@ -351,6 +351,20 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      get_trip_by_share_token: {
+        Args: { _token: string }
+        Returns: {
+          budget_level: number
+          created_at: string
+          destination: string
+          end_date: string
+          id: string
+          start_date: string
+          styles: string[]
+          travelers: number
+          trip_data: Json
+        }[]
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]

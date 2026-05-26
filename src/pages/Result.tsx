@@ -93,10 +93,11 @@ const Result = () => {
       // Shared view - load by share_token
       setLoadingTrip(true);
       setIsSharedView(true);
-      supabase.from("trips").select("id, trip_data").eq("share_token", shareToken).maybeSingle().then(({ data }) => {
-        if (data?.trip_data) {
-          setTrip(data.trip_data as unknown as TripPlan);
-          setDbTripId(data.id);
+      supabase.rpc("get_trip_by_share_token", { _token: shareToken }).then(({ data }) => {
+        const row = Array.isArray(data) ? data[0] : null;
+        if (row?.trip_data) {
+          setTrip(row.trip_data as unknown as TripPlan);
+          setDbTripId(row.id);
           setSaved(true);
         } else {
           toast.error("Link chia sẻ không hợp lệ hoặc đã hết hạn");
