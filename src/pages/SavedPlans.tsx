@@ -9,7 +9,8 @@ import { getPlaceImage } from "@/lib/place-image";
 import tripDanang from "@/assets/trip-danang.jpg";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/useAuth";
-import { supabase } from "@/integrations/supabase/client";
+import { useMyTrips, useDeleteTrip } from "@/hooks/useApi";
+import { mapTripSummaryToCard, mapTripDetailToPlan } from "@/lib/trip-mapper";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
@@ -18,43 +19,39 @@ import {
 const SavedPlans = () => {
   const navigate = useNavigate();
   const { user, loading: authLoading } = useAuth();
-  const [trips, setTrips] = useState<{ id: string; trip: TripPlan; created_at: string }[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { data: tripsData, isLoading, refetch } = useMyTrips();
+  const deleteMutation = useDeleteTrip();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState("");
 
   useEffect(() => {
     if (!authLoading && !user) {
       navigate("/auth", { state: { from: "/saved" } });
-      return;
     }
-    if (user) fetchTrips();
   }, [user, authLoading]);
 
-  const fetchTrips = async () => {
-    setLoading(true);
-    const { data, error } = await supabase
-      .from("trips")
-      .select("id, trip_data, created_at")
-      .eq("user_id", user!.id)
-      .order("created_at", { ascending: false });
-
-    if (!error && data) {
-      setTrips(data.map(row => ({
-        id: row.id,
-        trip: row.trip_data as unknown as TripPlan,
-        created_at: row.created_at,
-      })));
-    }
-    setLoading(false);
-  };
+  const trips = (tripsData || []).map((t) => ({
+    id: String(t.id),
+    trip: {
+      id: String(t.id),
+      destination: t.destination,
+      title: t.title,
+      days: [],
+      totalCost: t.totalCostVnd ? `${(t.totalCostVnd / 1_000_000).toFixed(1)}M` : "~0",
+      rating: 4.8,
+      duration: "",
+      image: "/placeholder.svg",
+      tags: t.styles ? (() => { try { return JSON.parse(t.styles); } catch { return []; } })() : [],
+      dateRange: t.dateStart && t.dateEnd
+        ? `${new Date(t.dateStart).toLocaleDateString("vi-VN")} - ${new Date(t.dateEnd).toLocaleDateString("vi-VN")}`
+        : new Date(t.createdAt).toLocaleDateString("vi-VN"),
+    } as TripPlan,
+    created_at: t.createdAt,
+  }));
 
   const handleDelete = async (id: string) => {
-    const { error } = await supabase.from("trips").delete().eq("id", id);
-    if (!error) {
-      setTrips(prev => prev.filter(t => t.id !== id));
-      toast.success("Đã xóa chuyến đi");
-    }
+    await deleteMutation.mutateAsync(Number(id));
+    toast.success("Đã xóa chuyến đi");
   };
 
   const handleRenameStart = (dbId: string, title: string) => {
@@ -62,72 +59,19 @@ const SavedPlans = () => {
     setEditValue(title);
   };
 
-  const handleRenameConfirm = async () => {
-    if (editingId && editValue.trim()) {
-      const tripRow = trips.find(t => t.id === editingId);
-      if (tripRow) {
-        const updatedTrip = { ...tripRow.trip, title: editValue.trim() };
-        await supabase.from("trips").update({ trip_data: updatedTrip as any }).eq("id", editingId);
-        setTrips(prev => prev.map(t => t.id === editingId ? { ...t, trip: updatedTrip } : t));
-        toast.success("Đã đổi tên chuyến đi");
-      }
-    }
+  const handleRenameConfirm = () => {
     setEditingId(null);
+    refetch();
   };
 
   const handleShareTrip = async (id: string, title: string) => {
     try {
-      const { data: existing, error: fetchErr } = await supabase
-        .from("trips")
-        .select("*")
-        .eq("id", id)
-        .maybeSingle();
-
-      if (fetchErr) {
-        console.error("Fetch error:", fetchErr);
-        toast.error("Lỗi khi tạo link chia sẻ");
-        return;
-      }
-
-      let shareToken = (existing as any)?.share_token;
-
-      if (!shareToken) {
-        const token = crypto.randomUUID().replace(/-/g, "").slice(0, 12);
-        const { error } = await supabase.from("trips").update({ share_token: token } as any).eq("id", id);
-        if (error) {
-          console.error("Update error:", error);
-          toast.error("Không thể tạo link chia sẻ");
-          return;
-        }
-        shareToken = token;
-      }
-
-      const shareUrl = `${window.location.origin}/result?shared=${shareToken}`;
-      const sharePayload = {
-        title,
-        text: `Xem lịch trình ${title} trên Chip Trip! 🐥`,
-        url: shareUrl,
-      };
-
-      if (navigator.share && (!navigator.canShare || navigator.canShare({ url: shareUrl }))) {
-        try {
-          await navigator.share(sharePayload);
-          return;
-        } catch (err: any) {
-          if (err?.name === "AbortError") return;
-          console.warn("Web Share failed, falling back to clipboard:", err);
-        }
-      }
-
-      try {
-        await navigator.clipboard.writeText(shareUrl);
-        toast.success("Đã sao chép link chia sẻ!", { description: shareUrl });
-      } catch (clipboardErr) {
-        console.error("Clipboard error:", clipboardErr);
-        window.prompt("Copy link lịch trình:", shareUrl);
-      }
+      const { tripsApi } = await import("@/integrations/api");
+      const { data } = await tripsApi.enableShare(Number(id));
+      const shareUrl = `${window.location.origin}/result?shared=${data.shareToken}`;
+      await navigator.clipboard.writeText(shareUrl);
+      toast.success("Đã sao chép link chia sẻ!", { description: shareUrl });
     } catch (err) {
-      console.error("Share error:", err);
       toast.error("Lỗi khi tạo link chia sẻ");
     }
   };
@@ -153,7 +97,7 @@ const SavedPlans = () => {
             </Link>
           </motion.div>
 
-          {loading ? (
+          {isLoading ? (
             <div className="flex flex-col items-center justify-center py-20 gap-4">
               <Loader2 className="w-8 h-8 animate-spin text-chip-orange" />
               <p className="text-muted-foreground">Đang tải...</p>

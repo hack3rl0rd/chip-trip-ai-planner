@@ -6,8 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { MapPin, Mail, Lock, User, Eye, EyeOff, ArrowLeft, Sparkles } from "lucide-react";
 import { toast } from "sonner";
-import { supabase } from "@/integrations/supabase/client";
-import { lovable } from "@/integrations/lovable/index";
+import { authApi, authStorage } from "@/integrations/api";
 import { useAuth } from "@/hooks/useAuth";
 
 const Auth = () => {
@@ -36,41 +35,30 @@ const Auth = () => {
       toast.error("Vui lòng nhập tên của bạn");
       return;
     }
-    if (form.password.length < 6) {
-      toast.error("Mật khẩu phải có ít nhất 6 ký tự");
+    if (form.password.length < 8) {
+      toast.error("Mật khẩu phải có ít nhất 8 ký tự");
       return;
     }
 
     setLoading(true);
     try {
       if (isLogin) {
-        const { error } = await supabase.auth.signInWithPassword({
-          email: form.email,
-          password: form.password,
-        });
-        if (error) throw error;
+        const authResponse = await authApi.login({ email: form.email, password: form.password });
+        authStorage.setAccessToken(authResponse.accessToken);
+        authStorage.setRefreshToken(authResponse.refreshToken);
+        authStorage.setUser(authResponse);
         toast.success("Đăng nhập thành công! 🎉");
-        navigate(from);
+        navigate(from, { replace: true });
       } else {
-        const { error } = await supabase.auth.signUp({
-          email: form.email,
-          password: form.password,
-          options: {
-            data: { full_name: form.name },
-            emailRedirectTo: window.location.origin,
-          },
-        });
-        if (error) throw error;
+        await authApi.register({ email: form.email, password: form.password, fullName: form.name });
         toast.success("Đăng ký thành công! 🎉", {
-          description: "Kiểm tra email để xác nhận tài khoản",
+          description: "Đăng nhập để bắt đầu sử dụng",
         });
+        setIsLogin(true);
+        setForm((f) => ({ ...f, password: "" }));
       }
     } catch (error: any) {
-      const msg = error.message?.includes("Invalid login")
-        ? "Email hoặc mật khẩu không đúng"
-        : error.message?.includes("already registered")
-        ? "Email đã được đăng ký"
-        : error.message || "Có lỗi xảy ra";
+      const msg = error.response?.data?.message || error.message || "Có lỗi xảy ra";
       toast.error(msg);
     } finally {
       setLoading(false);
@@ -78,11 +66,29 @@ const Auth = () => {
   };
 
   const handleGoogleLogin = async () => {
-    const { error } = await lovable.auth.signInWithOAuth("google", {
-      redirect_uri: window.location.origin,
-    });
-    if (error) {
+    setLoading(true);
+    try {
+      const client = window.google.accounts.oauth2.initTokenClient({
+        client_id: import.meta.env.VITE_GOOGLE_CLIENT_ID,
+        scope: "email profile openid",
+        callback: async (response: any) => {
+          if (response.error) {
+            toast.error("Đăng nhập Google thất bại");
+            setLoading(false);
+            return;
+          }
+          const authResponse = await authApi.googleLogin(response.access_token);
+          authStorage.setAccessToken(authResponse.accessToken);
+          authStorage.setRefreshToken(authResponse.refreshToken);
+          authStorage.setUser(authResponse);
+          toast.success("Đăng nhập thành công! 🎉");
+          navigate(from, { replace: true });
+        },
+      });
+      client.requestAccessToken();
+    } catch {
       toast.error("Đăng nhập Google thất bại");
+      setLoading(false);
     }
   };
 
@@ -91,13 +97,11 @@ const Auth = () => {
       toast.error("Vui lòng nhập email trước");
       return;
     }
-    const { error } = await supabase.auth.resetPasswordForEmail(form.email, {
-      redirectTo: `${window.location.origin}/auth`,
-    });
-    if (error) {
-      toast.error("Có lỗi xảy ra");
-    } else {
+    try {
+      await authApi.forgotPassword(form.email);
       toast.success("Đã gửi email đặt lại mật khẩu!");
+    } catch {
+      toast.error("Có lỗi xảy ra");
     }
   };
 
@@ -205,7 +209,7 @@ const Auth = () => {
               <Label htmlFor="password" className="text-foreground font-medium mb-1.5 block">Mật khẩu</Label>
               <div className="relative">
                 <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                <Input id="password" type={showPassword ? "text" : "password"} placeholder="Ít nhất 6 ký tự" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} className="pl-10 pr-10 h-12 rounded-xl" maxLength={128} />
+                <Input id="password" type={showPassword ? "text" : "password"} placeholder="Ít nhất 8 ký tự" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} className="pl-10 pr-10 h-12 rounded-xl" maxLength={128} />
                 <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors">
                   {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>

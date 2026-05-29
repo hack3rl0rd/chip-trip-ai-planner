@@ -15,7 +15,9 @@ import WeatherWidget from "@/components/WeatherWidget";
 import GroupPanel from "@/components/GroupPanel";
 import SplitBill from "@/components/SplitBill";
 import { useAuth } from "@/hooks/useAuth";
-import { supabase } from "@/integrations/supabase/client";
+import { tripsApi } from "@/integrations/api";
+import { useTripDetail, useSharedTrip, useCloneTrip, useEnableShare } from "@/hooks/useApi";
+import { mapTripDetailToPlan } from "@/lib/trip-mapper";
 import ChipMascot from "@/components/ChipMascot";
 
 const bookingIcons: Record<string, React.ElementType> = {
@@ -30,11 +32,8 @@ const Result = () => {
   const { state } = useLocation();
   const [searchParams] = useSearchParams();
   const { user, profile } = useAuth();
-  const [saved, setSaved] = useState(false);
-  const [editMode] = useState(false);
   const [swapModal, setSwapModal] = useState<{ open: boolean; item: TripItem | null; dayIdx: number; itemIdx: number }>({ open: false, item: null, dayIdx: 0, itemIdx: 0 });
-  const [loadingTrip, setLoadingTrip] = useState(false);
-  const [dbTripId, setDbTripId] = useState<string | null>(null);
+  const [dbTripId, setDbTripId] = useState<number | null>(null);
   const [trip, setTrip] = useState<TripPlan | null>(null);
   const [expandedDays, setExpandedDays] = useState<Set<number>>(new Set());
   const [allExpanded, setAllExpanded] = useState(false);
@@ -43,6 +42,46 @@ const Result = () => {
   const dayTabsRef = useRef<HTMLDivElement>(null);
   const dayButtonRefs = useRef<(HTMLButtonElement | null)[]>([]);
   const [isSharedView, setIsSharedView] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  const tripIdFromState = (state as any)?.tripId as number | null;
+  const tripFromState = (state as any)?.trip as TripPlan | null;
+  const sharedToken = searchParams.get("shared");
+  const urlTripId = searchParams.get("id");
+
+  const { data: remoteTrip, isLoading: loadingRemote } = useTripDetail(
+    !sharedToken && !tripFromState ? (urlTripId ? Number(urlTripId) : tripIdFromState) : null
+  );
+  const { data: sharedTrip, isLoading: loadingShared } = useSharedTrip(sharedToken);
+  const cloneMutation = useCloneTrip();
+  const enableShareMutation = useEnableShare();
+
+  // Set trip from navigation state or API
+  useEffect(() => {
+    if (tripFromState) {
+      setTrip(tripFromState);
+      if (tripIdFromState) setDbTripId(tripIdFromState);
+      setSaved(!!tripIdFromState);
+      return;
+    }
+
+    if (sharedTrip) {
+      const plan = mapTripDetailToPlan(sharedTrip);
+      setTrip(plan);
+      setDbTripId(sharedTrip.id);
+      setSaved(true);
+      setIsSharedView(true);
+      return;
+    }
+
+    if (remoteTrip) {
+      const plan = mapTripDetailToPlan(remoteTrip);
+      setTrip(plan);
+      setDbTripId(remoteTrip.id);
+      setSaved(true);
+      return;
+    }
+  }, [tripFromState, sharedTrip, remoteTrip, tripIdFromState]);
 
   const handleDayClick = useCallback((dayIdx: number) => {
     setActiveDay(dayIdx);
@@ -52,7 +91,6 @@ const Result = () => {
     }
   }, []);
 
-  // Initialize expanded days - first 3 open by default
   useEffect(() => {
     if (trip) {
       const initial = new Set<number>();
@@ -85,45 +123,6 @@ const Result = () => {
     setAllExpanded(!allExpanded);
   };
 
-  useEffect(() => {
-    const tripId = searchParams.get("id");
-    const shareToken = searchParams.get("shared");
-    
-    if (shareToken) {
-      // Shared view - load by share_token
-      setLoadingTrip(true);
-      setIsSharedView(true);
-      supabase.rpc("get_trip_by_share_token", { _token: shareToken }).then(({ data }) => {
-        const row = Array.isArray(data) ? data[0] : null;
-        if (row?.trip_data) {
-          setTrip(row.trip_data as unknown as TripPlan);
-          setDbTripId(row.id);
-          setSaved(true);
-        } else {
-          toast.error("Link chia sẻ không hợp lệ hoặc đã hết hạn");
-          navigate("/");
-        }
-        setLoadingTrip(false);
-      });
-    } else if (tripId) {
-      setLoadingTrip(true);
-      setDbTripId(tripId);
-      supabase.from("trips").select("id, trip_data").eq("id", tripId).maybeSingle().then(({ data }) => {
-        if (data?.trip_data) {
-          setTrip(data.trip_data as unknown as TripPlan);
-          setSaved(true);
-        } else {
-          setTrip(state?.trip || generateTrip("Đà Nẵng", "2026-03-15", "2026-03-17", 3, []));
-        }
-        setLoadingTrip(false);
-      });
-    } else if (state?.trip) {
-      setTrip(state.trip as TripPlan);
-    } else {
-      setTrip(generateTrip("Đà Nẵng", "2026-03-15", "2026-03-17", 3, []));
-    }
-  }, []);
-
   const packingItems = trip ? generatePackingList(
     trip.destination, trip.days.length,
     trip.tags.map(t => {
@@ -140,56 +139,24 @@ const Result = () => {
 
   const handleSave = async () => {
     if (!user) { toast.error("Vui lòng đăng nhập để lưu lịch trình"); navigate("/auth", { state: { from: "/result" } }); return; }
-    try {
-      const { data, error } = await supabase.from("trips").insert({
-        user_id: user.id, destination: trip!.destination,
-        start_date: trip!.days[0]?.date || null, end_date: trip!.days[trip!.days.length - 1]?.date || null,
-        trip_data: trip as any,
-      }).select("id").single();
-      if (error) throw error;
-      setSaved(true);
-      if (data) { setDbTripId(data.id); window.history.replaceState(null, "", `/result?id=${data.id}`); }
-      toast.success("Đã lưu kế hoạch!", {
-        description: "Xem lại trong \"Chuyến đi của tôi\"",
-        action: { label: "Xem ngay", onClick: () => navigate("/saved") },
-      });
-    } catch (error: any) { toast.error("Lưu thất bại: " + (error.message || "Có lỗi xảy ra")); }
+    // Trip is already saved via backend during generation — just mark as saved
+    setSaved(true);
+    setDbTripId(tripFromState?.id ? Number(tripFromState.id) : dbTripId);
+    toast.success("Đã lưu kế hoạch!", {
+      description: "Xem lại trong \"Chuyến đi của tôi\"",
+      action: { label: "Xem ngay", onClick: () => navigate("/saved") },
+    });
   };
 
   const handleShare = async () => {
-    if (!dbTripId) { toast.error("Vui lòng lưu lịch trình trước khi chia sẻ"); return; }
+    if (!dbTripId) {
+      toast.error("Vui lòng lưu lịch trình trước khi chia sẻ");
+      return;
+    }
 
     try {
-      const { data: existing, error: fetchErr } = await supabase
-        .from("trips")
-        .select("*")
-        .eq("id", dbTripId)
-        .maybeSingle();
-
-      if (fetchErr) {
-        console.error("Fetch error:", fetchErr);
-        toast.error("Lỗi khi tạo link chia sẻ");
-        return;
-      }
-
-      let shareToken = (existing as any)?.share_token;
-
-      if (!shareToken) {
-        const token = crypto.randomUUID().replace(/-/g, "").slice(0, 12);
-        const { error: updateErr } = await supabase
-          .from("trips")
-          .update({ share_token: token } as any)
-          .eq("id", dbTripId);
-
-        if (updateErr) {
-          console.error("Update error:", updateErr);
-          toast.error("Không thể tạo link chia sẻ");
-          return;
-        }
-
-        shareToken = token;
-      }
-
+      const result = await enableShareMutation.mutateAsync(dbTripId);
+      const shareToken = result.shareToken;
       const shareUrl = `${window.location.origin}/result?shared=${shareToken}`;
       const sharePayload = {
         title: trip!.title,
@@ -203,19 +170,12 @@ const Result = () => {
           return;
         } catch (err: any) {
           if (err?.name === "AbortError") return;
-          console.warn("Web Share failed, falling back to clipboard:", err);
         }
       }
 
-      try {
-        await navigator.clipboard.writeText(shareUrl);
-        toast.success("Đã sao chép link chia sẻ!", { description: shareUrl });
-      } catch (clipboardErr) {
-        console.error("Clipboard error:", clipboardErr);
-        window.prompt("Copy link lịch trình:", shareUrl);
-      }
-    } catch (err) {
-      console.error("Share error:", err);
+      await navigator.clipboard.writeText(shareUrl);
+      toast.success("Đã sao chép link chia sẻ!", { description: shareUrl });
+    } catch (err: any) {
       toast.error("Lỗi khi tạo link chia sẻ");
     }
   };
@@ -228,10 +188,9 @@ const Result = () => {
   };
 
   const handleClone = async () => {
-    if (!user) { toast.error("Vui lòng đăng nhập để clone lịch trình"); return; }
-    const cloned: TripPlan = { ...trip!, id: Date.now().toString(), title: trip!.title + " (bản sao)" };
+    if (!dbTripId) { toast.error("Vui lòng lưu lịch trình trước"); return; }
     try {
-      await supabase.from("trips").insert({ user_id: user.id, destination: cloned.destination, trip_data: cloned as any });
+      const cloned = await cloneMutation.mutateAsync(dbTripId);
       toast.success("Đã clone lịch trình!", {
         description: "Bản sao đã được lưu vào \"Chuyến đi của tôi\"",
         action: { label: "Xem ngay", onClick: () => navigate("/saved") },
@@ -279,7 +238,7 @@ const Result = () => {
     toast.success("Đã đổi hoạt động!");
   };
 
-  if (loadingTrip || !trip) {
+  if (loadingRemote || loadingShared || !trip) {
     return (
       <div className="min-h-screen bg-background">
         <Navbar />
@@ -397,7 +356,7 @@ const Result = () => {
                   {!isSharedView && (
                     <div className="flex gap-2 flex-wrap">
                       {dbTripId && <GroupPanel tripId={dbTripId} isOwner={true} />}
-                      {dbTripId && <SplitBill tripId={dbTripId} memberNames={user ? { [user.id]: profile?.display_name || user.email?.split("@")[0] || "Bạn" } : {}} travelerCount={trip?.days?.[0]?.items ? undefined : 2} />}
+                      {dbTripId && <SplitBill tripId={dbTripId} memberNames={user ? { [user.id]: profile?.fullName || user.email?.split("@")[0] || "Bạn" } : {}} travelerCount={trip?.days?.[0]?.items ? undefined : 2} />}
                     </div>
                   )}
                 </div>
@@ -533,7 +492,7 @@ const Result = () => {
                 {saved ? "Đã lưu" : "Lưu"}
               </Button>
               {dbTripId && (
-                <SplitBill tripId={dbTripId} memberNames={user ? { [user.id]: profile?.display_name || user.email?.split("@")[0] || "Bạn" } : {}} />
+                <SplitBill tripId={dbTripId} memberNames={user ? { [user.id]: profile?.fullName || user.email?.split("@")[0] || "Bạn" } : {}} />
               )}
               <Button variant="soft" size="sm" onClick={handleShare} className="gap-1.5 flex-shrink-0">
                 <Share2 className="w-4 h-4" /> Chia sẻ

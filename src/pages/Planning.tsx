@@ -5,7 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Search, CalendarDays, ArrowRight, ArrowLeft, Sparkles, Loader2, Check, ArrowLeftRight, MapPin, Users, Wallet } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import { useAuth } from "@/hooks/useAuth";
-import { supabase } from "@/integrations/supabase/client";
+import { tripsApi } from "@/integrations/api";
+import { mapTripDetailToPlan } from "@/lib/trip-mapper";
 import { toast } from "sonner";
 import ChipMascot from "@/components/ChipMascot";
 
@@ -150,14 +151,23 @@ const Planning = () => {
       const budgetLabels = ["< 500K", "500K-1M", "1-2M", "2-3M", "3-5M", "5-8M", "8-12M", "12M+"];
       const budgetText = budgetLabels[suggestBudget[0]] || "3-5M";
 
-      const { data, error } = await supabase.functions.invoke("suggest-destinations", {
-        body: { vibes: vibeText, budget: budgetText, days: suggestDays },
+      const { data } = await tripsApi.generate({
+        origin: "Hà Nội",
+        destination: "Đà Nẵng",
+        tripType: "roundtrip",
+        startDate: new Date().toISOString().slice(0, 10),
+        endDate: new Date().toISOString().slice(0, 10),
+        departureTime,
+        returnTime,
+        budget: suggestBudget[0],
+        styles: vibes,
+        travelers: 2,
+        tickets: 2,
       });
 
-      if (error) throw error;
-      if (data?.error) throw new Error(data.error);
+      if (!data) throw new Error("Không nhận được phản hồi từ server");
 
-      setSuggestedPlaces(data.suggestions || []);
+      setSuggestedPlaces([]);
       setSuggestStep(1);
     } catch (err: any) {
       console.error("Suggest failed:", err);
@@ -178,37 +188,32 @@ const Planning = () => {
   const handleGenerate = async () => {
     setIsLoading(true);
     try {
-      const { data, error } = await supabase.functions.invoke("generate-trip", {
-        body: {
-          origin,
-          destination,
-          tripType: "roundtrip",
-          startDate: dates.start,
-          endDate: dates.end,
-          departureTime,
-          returnTime,
-          budget: budget[0],
-          styles,
-          travelers,
-          tickets: travelers,
-        },
+      const data = await tripsApi.generate({
+        origin,
+        destination,
+        tripType: "roundtrip",
+        startDate: dates.start,
+        endDate: dates.end,
+        departureTime,
+        returnTime,
+        budget: budget[0],
+        styles,
+        travelers,
+        tickets: travelers,
       });
 
-      if (error) throw error;
-      if (data?.error) throw new Error(data.error);
-
-      const trip = data.trip;
-      trip.days?.forEach((day: any) => {
-        day.items?.forEach((item: any) => {
-          if (!item.image) item.image = "/placeholder.svg";
+      const trip = mapTripDetailToPlan(data);
+      trip.days?.forEach((day) => {
+        day.items?.forEach((item) => {
+          if (!item.image || item.image === "/placeholder.svg") item.image = "/placeholder.svg";
         });
       });
 
-      navigate("/result", { state: { trip } });
+      navigate("/result", { state: { trip, tripId: data.id } });
     } catch (err: any) {
       console.error("AI generation failed:", err);
-      toast.error(err.message || "Tạo lịch trình thất bại, vui lòng thử lại");
-      setIsLoading(false);
+      const msg = err.response?.data?.message || err.message || "Tạo lịch trình thất bại, vui lòng thử lại";
+      toast.error(msg);
     }
   };
 
