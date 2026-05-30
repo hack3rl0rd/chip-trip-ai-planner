@@ -54,8 +54,8 @@ const Navbar = () => {
     toast.success("Đã đăng xuất");
   };
 
-  const displayName = profile?.display_name || user?.email?.split("@")[0] || "";
-  const avatarUrl = profile?.avatar_url;
+  const displayName = profile?.fullName || user?.fullName || user?.email?.split("@")[0] || "";
+  const avatarUrl = profile?.avatarUrl;
   const initial = (displayName || "U")[0].toUpperCase();
 
   return (

@@ -4,7 +4,7 @@ import { motion } from "framer-motion";
 import { Shield, Lock, Mail, Loader2, Eye, EyeOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { supabase } from "@/config/supabase";
+import { authApi, authStorage } from "@/integrations/api";
 import { toast } from "sonner";
 
 const AdminLogin = () => {
@@ -23,31 +23,23 @@ const AdminLogin = () => {
 
     setLoading(true);
     try {
-      const { error: authError } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
+      const authResponse = await authApi.login({ email, password });
 
-      if (authError) {
-        toast.error("Email hoặc mật khẩu không đúng");
-        setLoading(false);
-        return;
-      }
-
-      // Check if user has admin role via edge function
-      const { data, error } = await supabase.functions.invoke("admin-users?action=check-role");
-
-      if (error || !data?.isAdmin) {
-        await supabase.auth.signOut();
+      if (authResponse.role !== "ADMIN") {
+        authStorage.clear();
         toast.error("Tài khoản này không có quyền admin");
         setLoading(false);
         return;
       }
 
+      authStorage.setAccessToken(authResponse.accessToken);
+      authStorage.setRefreshToken(authResponse.refreshToken);
+      authStorage.setUser(authResponse);
       toast.success("Đăng nhập admin thành công!");
       navigate("/admin/users");
-    } catch {
-      toast.error("Đã xảy ra lỗi");
+    } catch (err: any) {
+      const msg = err.response?.data?.message || err.message || "Email hoặc mật khẩu không đúng";
+      toast.error(msg);
     }
     setLoading(false);
   };

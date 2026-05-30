@@ -1,14 +1,16 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
-import { supabase } from "@/config/supabase";
-import type { User, Session } from "@supabase/supabase-js";
+import { authStorage } from "@/integrations/api/client";
+import { authApi } from "@/integrations/api";
+import type { AuthResponse, UserProfile } from "@/integrations/api/types";
 
 interface AuthContextType {
-  user: User | null;
-  session: Session | null;
+  user: { id: number; email: string; fullName: string | null; role?: string } | null;
+  session: { accessToken: string; refreshToken: string } | null;
+  profile: UserProfile | null;
   loading: boolean;
-  profile: { display_name: string | null; avatar_url: string | null } | null;
   isAdmin: boolean;
   signOut: () => Promise<void>;
+  updateProfile: (profile: Partial<UserProfile>) => void;
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -18,67 +20,72 @@ const AuthContext = createContext<AuthContextType>({
   profile: null,
   isAdmin: false,
   signOut: async () => {},
+  updateProfile: () => {},
 });
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
-  const [user, setUser] = useState<User | null>(null);
-  const [session, setSession] = useState<Session | null>(null);
+  const [session, setSession] = useState<{ accessToken: string; refreshToken: string } | null>(null);
+  const [user, setUser] = useState<{ id: number; email: string; fullName: string | null; role?: string } | null>(null);
+  const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
-  const [profile, setProfile] = useState<{ display_name: string | null; avatar_url: string | null } | null>(null);
-  const [isAdmin, setIsAdmin] = useState(false);
-
-  useEffect(() => {
-    // Set up auth listener FIRST
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      setLoading(false);
-
-      if (session?.user) {
-        // Fetch profile with setTimeout to avoid deadlock
-        setTimeout(async () => {
-          const [profileRes, roleRes] = await Promise.all([
-            supabase
-              .from("profiles")
-              .select("display_name, avatar_url")
-              .eq("user_id", session.user.id)
-              .single(),
-            supabase
-              .from("user_roles")
-              .select("role")
-              .eq("user_id", session.user.id)
-              .eq("role", "admin")
-              .maybeSingle(),
-          ]);
-          if (profileRes.data) setProfile(profileRes.data);
-          setIsAdmin(!!roleRes.data);
-        }, 0);
-      } else {
-        setProfile(null);
-        setIsAdmin(false);
-      }
-    });
-
-    // THEN check existing session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      setLoading(false);
-    });
-
-    return () => subscription.unsubscribe();
-  }, []);
 
   const signOut = async () => {
-    await supabase.auth.signOut();
+    try {
+      await authApi.logout();
+    } catch {
+    }
+    authStorage.clear();
     setUser(null);
     setSession(null);
     setProfile(null);
-    setIsAdmin(false);
+    window.dispatchEvent(new Event("chiptrip-auth-change"));
+    window.location.href = "/";
   };
 
+  const updateProfile = (updated: Partial<UserProfile>) => {
+    setProfile((prev) => (prev ? { ...prev, ...updated } : null));
+    if (updated.fullName) {
+      setUser((prev) => (prev ? { ...prev, fullName: updated.fullName ?? null } : null));
+    }
+  };
+
+  // Re-read localStorage whenever storage changes (login/logout in another tab or direct localStorage manipulation)
+  useEffect(() => {
+    const onStorage = () => {
+      const accessToken = authStorage.getAccessToken();
+      const refreshToken = authStorage.getRefreshToken();
+      const storedUser = authStorage.getUser() as AuthResponse | null;
+
+      if (accessToken && refreshToken && storedUser) {
+        setSession({ accessToken, refreshToken });
+        setUser({ id: storedUser.userId, email: storedUser.email, fullName: storedUser.fullName ?? null, role: storedUser.role });
+        setProfile({
+          userId: storedUser.userId,
+          email: storedUser.email,
+          fullName: storedUser.fullName ?? null,
+          avatarUrl: null,
+          aiCredits: 0,
+          createdAt: "",
+          role: storedUser.role,
+        });
+      } else {
+        authStorage.clear();
+        setUser(null);
+        setSession(null);
+        setProfile(null);
+      }
+      setLoading(false);
+    };
+
+    onStorage(); // run once on mount to pick up any existing session
+    window.addEventListener("chiptrip-auth-change", onStorage);
+    return () => window.removeEventListener("chiptrip-auth-change", onStorage);
+  }, []);
+
+  const isAdmin = user?.role === "ADMIN";
+
   return (
-    <AuthContext.Provider value={{ user, session, loading, profile, isAdmin, signOut }}>
+    <AuthContext.Provider value={{ user, session, loading, profile, isAdmin, signOut, updateProfile }}>
       {children}
     </AuthContext.Provider>
   );

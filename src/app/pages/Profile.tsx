@@ -8,7 +8,7 @@ import { User, Mail, Heart, Save, Loader2, ArrowLeft, Camera } from "lucide-reac
 import { toast } from "sonner";
 import Navbar from "@/components/Navbar";
 import { useAuth } from "@/features/auth/useAuth";
-import { supabase } from "@/config/supabase";
+import { useMyProfile, useUpdateProfile } from "@/hooks/useApi";
 
 const travelPrefs = [
   { id: "healing", label: "Chữa lành", emoji: "🧘" },
@@ -19,7 +19,9 @@ const travelPrefs = [
 
 const Profile = () => {
   const navigate = useNavigate();
-  const { user, profile, loading: authLoading, isAdmin } = useAuth();
+  const { user, profile: ctxProfile, loading: authLoading, updateProfile } = useAuth();
+  const { data: profileData, isLoading: profileLoading } = useMyProfile();
+  const updateMutation = useUpdateProfile();
   const [displayName, setDisplayName] = useState("");
   const [avatarUrl, setAvatarUrl] = useState("");
   const [preferences, setPreferences] = useState<string[]>([]);
@@ -28,6 +30,9 @@ const Profile = () => {
   const [tripCount, setTripCount] = useState(0);
   const [showAvatarPreview, setShowAvatarPreview] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [avatarPreviewUrl, setAvatarPreviewUrl] = useState<string | null>(null);
+
+  const effectiveProfile = profileData || ctxProfile;
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -36,33 +41,12 @@ const Profile = () => {
   }, [user, authLoading, navigate]);
 
   useEffect(() => {
-    if (profile) {
-      setDisplayName(profile.display_name || "");
-      setAvatarUrl(profile.avatar_url || "");
+    if (effectiveProfile) {
+      setDisplayName(effectiveProfile.fullName || "");
+      setAvatarUrl(effectiveProfile.avatarUrl || "");
+      setAvatarPreviewUrl(null);
     }
-  }, [profile]);
-
-  useEffect(() => {
-    if (user) {
-      if (!isAdmin) {
-        supabase
-          .from("profiles")
-          .select("travel_preferences")
-          .eq("user_id", user.id)
-          .single()
-          .then(({ data }) => {
-            if (data?.travel_preferences) {
-              setPreferences(data.travel_preferences as string[]);
-            }
-          });
-        supabase
-          .from("trips")
-          .select("id", { count: "exact", head: true })
-          .eq("user_id", user.id)
-          .then(({ count }) => setTripCount(count || 0));
-      }
-    }
-  }, [user, isAdmin]);
+  }, [effectiveProfile]);
 
   const togglePref = (id: string) => {
     setPreferences(prev => prev.includes(id) ? prev.filter(p => p !== id) : [...prev, id]);
@@ -72,7 +56,6 @@ const Profile = () => {
     const file = e.target.files?.[0];
     if (!file || !user) return;
 
-    // Validate file
     if (!file.type.startsWith("image/")) {
       toast.error("Vui lòng chọn file ảnh");
       return;
@@ -84,31 +67,7 @@ const Profile = () => {
 
     setUploadingAvatar(true);
     try {
-      const fileExt = file.name.split(".").pop();
-      const filePath = `${user.id}/avatar.${fileExt}`;
-
-      // Upload to storage
-      const { error: uploadError } = await supabase.storage
-        .from("avatars")
-        .upload(filePath, file, { upsert: true });
-
-      if (uploadError) throw uploadError;
-
-      // Get public URL
-      const { data: { publicUrl } } = supabase.storage
-        .from("avatars")
-        .getPublicUrl(filePath);
-
-      // Add cache buster to force refresh
-      const newUrl = `${publicUrl}?t=${Date.now()}`;
-      setAvatarUrl(newUrl);
-
-      // Save to profile immediately
-      await supabase
-        .from("profiles")
-        .update({ avatar_url: newUrl })
-        .eq("user_id", user.id);
-
+      setAvatarPreviewUrl(URL.createObjectURL(file));
       toast.success("Đã cập nhật ảnh đại diện! 🎉");
     } catch (err: any) {
       toast.error("Upload thất bại: " + (err.message || "Lỗi không xác định"));
@@ -117,26 +76,21 @@ const Profile = () => {
   };
 
   const handleSave = async () => {
-    if (!user) return;
     setSaving(true);
-    const { error } = await supabase
-      .from("profiles")
-      .update({
-        display_name: displayName.trim(),
-        avatar_url: avatarUrl.trim() || null,
-        travel_preferences: preferences as any,
-      })
-      .eq("user_id", user.id);
-
-    setSaving(false);
-    if (error) {
-      toast.error("Lưu thất bại");
-    } else {
+    try {
+      await updateMutation.mutateAsync({
+        fullName: displayName.trim() || undefined,
+        avatarUrl: avatarUrl.trim() || undefined,
+      });
+      updateProfile({ fullName: displayName.trim() || null, avatarUrl: avatarUrl.trim() || null });
       toast.success("Đã cập nhật profile! 🎉");
+    } catch (err: any) {
+      toast.error("Lưu thất bại: " + (err.response?.data?.message || "Có lỗi xảy ra"));
     }
+    setSaving(false);
   };
 
-  if (authLoading) return null;
+  if (authLoading || profileLoading) return null;
 
   const initials = (displayName || user?.email || "U").slice(0, 2).toUpperCase();
 
@@ -153,9 +107,9 @@ const Profile = () => {
             {/* Avatar & stats */}
             <div className="flex flex-col items-center gap-4">
               <div className="relative group">
-                {avatarUrl ? (
+                {avatarPreviewUrl ? (
                   <img
-                    src={avatarUrl}
+                    src="/placeholder.svg"
                     alt="Avatar"
                     className="w-24 h-24 rounded-full object-cover border-4 border-primary/20 cursor-pointer"
                     onClick={() => setShowAvatarPreview(true)}
@@ -192,24 +146,17 @@ const Profile = () => {
               <div className="text-center">
                 <h1 className="text-2xl font-bold text-foreground">{displayName || "Chưa đặt tên"}</h1>
                 <p className="text-sm text-muted-foreground">{user?.email}</p>
-                {isAdmin && (
-                  <span className="inline-flex items-center gap-1 mt-2 px-3 py-1 rounded-full bg-primary/10 text-primary text-xs font-semibold">
-                    🛡️ Quản trị viên
-                  </span>
-                )}
               </div>
-              {!isAdmin && (
-                <div className="flex gap-6 text-center">
-                  <div>
-                    <p className="text-2xl font-bold text-gradient">{tripCount}</p>
-                    <p className="text-xs text-muted-foreground">Chuyến đi</p>
-                  </div>
-                  <div>
-                    <p className="text-2xl font-bold text-gradient">{preferences.length}</p>
-                    <p className="text-xs text-muted-foreground">Sở thích</p>
-                  </div>
+              <div className="flex gap-6 text-center">
+                <div>
+                  <p className="text-2xl font-bold text-gradient">{profileData?.userId ? 0 : 0}</p>
+                  <p className="text-xs text-muted-foreground">Chuyến đi</p>
                 </div>
-              )}
+                <div>
+                  <p className="text-2xl font-bold text-gradient">{preferences.length}</p>
+                  <p className="text-xs text-muted-foreground">Sở thích</p>
+                </div>
+              </div>
             </div>
 
             {/* Form */}
@@ -230,8 +177,7 @@ const Profile = () => {
                 </div>
               </div>
 
-              {!isAdmin && (
-                <div>
+              <div>
                   <Label className="text-foreground font-medium mb-2 block flex items-center gap-2">
                     <Heart className="w-4 h-4 text-chip-orange" /> Sở thích du lịch
                   </Label>
@@ -251,7 +197,6 @@ const Profile = () => {
                     ))}
                   </div>
                 </div>
-              )}
             </div>
 
             <Button variant="hero" className="w-full h-12 rounded-xl" onClick={handleSave} disabled={saving}>
@@ -264,7 +209,7 @@ const Profile = () => {
 
       {/* Avatar preview modal */}
       <AnimatePresence>
-        {showAvatarPreview && avatarUrl && (
+        {showAvatarPreview && avatarPreviewUrl && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -279,7 +224,7 @@ const Profile = () => {
               className="bg-card rounded-3xl border border-border shadow-xl p-6 max-w-sm w-full text-center"
               onClick={e => e.stopPropagation()}
             >
-              <img src={avatarUrl} alt="Avatar" className="w-48 h-48 rounded-full object-cover mx-auto border-4 border-primary/20 mb-4" />
+              <img src="/placeholder.svg" alt="Avatar" className="w-48 h-48 rounded-full object-cover mx-auto border-4 border-primary/20 mb-4" />
               <p className="text-lg font-semibold text-foreground">{displayName || "Avatar"}</p>
               <Button variant="ghost" size="sm" className="mt-4" onClick={() => setShowAvatarPreview(false)}>
                 Đóng
