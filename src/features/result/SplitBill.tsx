@@ -1,10 +1,11 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Receipt, Plus, Trash2, ArrowRight, ChevronDown, ChevronUp, Pencil, Check, UserPlus, X } from "lucide-react";
 import { toast } from "sonner";
-import { supabase } from "@/config/supabase";
+import { expensesApi } from "@/integrations/api/modules/expenses";
 import { useAuth } from "@/features/auth/useAuth";
+import { useTripMembers } from "@/hooks/useApi";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger,
 } from "@/components/ui/dialog";
@@ -20,7 +21,7 @@ interface SplitBillProps {
 }
 
 interface Expense {
-  id: string;
+  id: string | number;
   paid_by: string;
   title: string;
   amount: number;
@@ -82,13 +83,39 @@ const SplitBill = ({ tripId, memberNames, travelerCount = 2 }: SplitBillProps) =
     split_among: [] as string[],
   });
 
+  const { data: dbMembers = [] } = useTripMembers(Number(tripId));
+
+  useEffect(() => {
+    if (dbMembers.length === 0) return;
+    setMembers(prev => {
+      const currentIds = new Set(prev.map(p => p.id.toString()));
+      const newMembers = [...prev];
+      let changed = false;
+
+      dbMembers.forEach((dbM: any) => {
+        const mId = (dbM.userId || `db-${dbM.id}`).toString();
+        if (!currentIds.has(mId)) {
+          newMembers.push({ id: mId, name: dbM.displayName });
+          changed = true;
+          
+          setForm(f => {
+            if (f.split_among.includes(mId)) return f;
+            return { ...f, split_among: [...f.split_among, mId] };
+          });
+        }
+      });
+
+      return changed ? newMembers : prev;
+    });
+  }, [dbMembers]);
+
   const fetchExpenses = async () => {
-    const { data } = await supabase
-      .from("trip_expenses")
-      .select("*")
-      .eq("trip_id", tripId)
-      .order("created_at", { ascending: false });
-    if (data) setExpenses(data as Expense[]);
+    try {
+      const data = await expensesApi.getExpenses(tripId);
+      if (data) setExpenses(data as Expense[]);
+    } catch (error) {
+      console.error("Failed to fetch expenses:", error);
+    }
   };
 
   const handleOpen = (isOpen: boolean) => {
@@ -162,29 +189,33 @@ const SplitBill = ({ tripId, memberNames, travelerCount = 2 }: SplitBillProps) =
 
     const paidBy = form.paid_by || members[0]?.id || user.id;
 
-    const { error } = await supabase.from("trip_expenses").insert({
-      trip_id: tripId,
-      paid_by: paidBy,
-      title: form.title,
-      amount,
-      category: form.category,
-      split_among: form.split_among,
-    });
+    setAdding(false);
+    try {
+      await expensesApi.createExpense(tripId, {
+        paidBy: paidBy,
+        title: form.title,
+        amount,
+        category: form.category,
+        splitAmong: form.split_among,
+      });
 
-    if (error) {
-      toast.error("Thêm chi phí thất bại");
-    } else {
       toast.success("Đã thêm chi phí");
       setForm({ title: "", amount: "", category: "food", paid_by: members[0]?.id || "", split_among: members.map(m => m.id) });
-      setAdding(false);
       fetchExpenses();
+    } catch (error) {
+      toast.error("Thêm chi phí thất bại");
+      setAdding(true);
     }
   };
 
-  const deleteExpense = async (id: string) => {
-    await supabase.from("trip_expenses").delete().eq("id", id);
-    setExpenses(prev => prev.filter(e => e.id !== id));
-    toast.success("Đã xóa");
+  const deleteExpense = async (id: string | number) => {
+    try {
+      await expensesApi.deleteExpense(tripId, id);
+      setExpenses(prev => prev.filter(e => e.id.toString() !== id.toString()));
+      toast.success("Đã xóa");
+    } catch (error) {
+      toast.error("Xóa chi phí thất bại");
+    }
   };
 
   const getName = (uid: string) => {

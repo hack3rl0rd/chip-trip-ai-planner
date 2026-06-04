@@ -2,22 +2,24 @@ import apiClient from "../client";
 import type { ApiResponse, TripDetail, TripGenerateResponse, TripSummary, ShareTokenResponse } from "../types";
 
 export interface GenerateTripPayload {
-  origin: string;
+  departure: string;
   destination: string;
   tripType: "roundtrip" | "oneway";
   startDate: string;
   endDate: string;
   departureTime: string;
   returnTime: string;
-  budget: number;
+  budgetVnd: number;
   styles: string[];
-  travelers: number;
+  peopleCount: number;
   tickets: number;
 }
 
 export const tripsApi = {
   generate: async (payload: GenerateTripPayload) => {
-    const { data } = await apiClient.post<ApiResponse<TripGenerateResponse>>("/trips/generate", payload);
+    const { data } = await apiClient.post<ApiResponse<TripGenerateResponse>>("/trips/generate", payload, {
+      timeout: 120_000,
+    });
     return data.data;
   },
 
@@ -40,6 +42,14 @@ export const tripsApi = {
 
   deleteTrip: async (id: number) => {
     await apiClient.delete(`/trips/${id}`);
+  },
+
+  deleteActivity: async (tripId: number, dayId: number, activityId: number) => {
+    await apiClient.delete(`/trips/${tripId}/days/${dayId}/activities/${activityId}`);
+  },
+
+  reorderActivities: async (tripId: number, dayId: number, orderedIds: number[]) => {
+    await apiClient.post(`/trips/${tripId}/days/${dayId}/activities/reorder`, { orderedIds });
   },
 
   cloneTrip: async (id: number) => {

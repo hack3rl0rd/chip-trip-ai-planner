@@ -4,11 +4,11 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { User, Mail, Heart, Save, Loader2, ArrowLeft, Camera } from "lucide-react";
+import { User, Mail, Heart, Save, Loader2, ArrowLeft, Camera, Lock } from "lucide-react";
 import { toast } from "sonner";
 import Navbar from "@/components/Navbar";
 import { useAuth } from "@/features/auth/useAuth";
-import { useMyProfile, useUpdateProfile } from "@/hooks/useApi";
+import { useMyProfile, useUpdateProfile, useChangePassword, useMyTrips } from "@/hooks/useApi";
 
 const travelPrefs = [
   { id: "healing", label: "Chữa lành", emoji: "🧘" },
@@ -21,16 +21,25 @@ const Profile = () => {
   const navigate = useNavigate();
   const { user, profile: ctxProfile, loading: authLoading, updateProfile } = useAuth();
   const { data: profileData, isLoading: profileLoading } = useMyProfile();
+  const { data: tripsData } = useMyTrips();
   const updateMutation = useUpdateProfile();
+  const changePasswordMutation = useChangePassword();
+
   const [displayName, setDisplayName] = useState("");
   const [avatarUrl, setAvatarUrl] = useState("");
   const [preferences, setPreferences] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
-  const [tripCount, setTripCount] = useState(0);
   const [showAvatarPreview, setShowAvatarPreview] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [avatarPreviewUrl, setAvatarPreviewUrl] = useState<string | null>(null);
+
+  // Password state
+  const [showPasswordForm, setShowPasswordForm] = useState(false);
+  const [oldPassword, setOldPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [changingPassword, setChangingPassword] = useState(false);
 
   const effectiveProfile = profileData || ctxProfile;
 
@@ -45,6 +54,11 @@ const Profile = () => {
       setDisplayName(effectiveProfile.fullName || "");
       setAvatarUrl(effectiveProfile.avatarUrl || "");
       setAvatarPreviewUrl(null);
+      if (effectiveProfile.preferences) {
+        setPreferences(effectiveProfile.preferences.split(",").filter(Boolean));
+      } else {
+        setPreferences([]);
+      }
     }
   }, [effectiveProfile]);
 
@@ -81,13 +95,51 @@ const Profile = () => {
       await updateMutation.mutateAsync({
         fullName: displayName.trim() || undefined,
         avatarUrl: avatarUrl.trim() || undefined,
+        preferences: preferences.join(","),
       });
-      updateProfile({ fullName: displayName.trim() || null, avatarUrl: avatarUrl.trim() || null });
+      updateProfile({
+        fullName: displayName.trim() || null,
+        avatarUrl: avatarUrl.trim() || null,
+        preferences: preferences.join(","),
+      });
       toast.success("Đã cập nhật profile! 🎉");
     } catch (err: any) {
       toast.error("Lưu thất bại: " + (err.response?.data?.message || "Có lỗi xảy ra"));
     }
     setSaving(false);
+  };
+
+  const handlePasswordChange = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!oldPassword || !newPassword || !confirmPassword) {
+      toast.error("Vui lòng điền đầy đủ thông tin mật khẩu");
+      return;
+    }
+    if (newPassword.length < 6) {
+      toast.error("Mật khẩu mới phải có ít nhất 6 ký tự");
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      toast.error("Mật khẩu mới và xác nhận mật khẩu không khớp");
+      return;
+    }
+
+    setChangingPassword(true);
+    try {
+      await changePasswordMutation.mutateAsync({
+        oldPassword,
+        newPassword,
+      });
+      toast.success("Đổi mật khẩu thành công! 🎉");
+      setOldPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+      setShowPasswordForm(false);
+    } catch (err: any) {
+      toast.error("Đổi mật khẩu thất bại: " + (err.response?.data?.message || "Mật khẩu cũ không chính xác"));
+    } finally {
+      setChangingPassword(false);
+    }
   };
 
   if (authLoading || profileLoading) return null;
@@ -107,9 +159,9 @@ const Profile = () => {
             {/* Avatar & stats */}
             <div className="flex flex-col items-center gap-4">
               <div className="relative group">
-                {avatarPreviewUrl ? (
+                {avatarPreviewUrl || avatarUrl ? (
                   <img
-                    src="/placeholder.svg"
+                    src={avatarPreviewUrl || avatarUrl}
                     alt="Avatar"
                     className="w-24 h-24 rounded-full object-cover border-4 border-primary/20 cursor-pointer"
                     onClick={() => setShowAvatarPreview(true)}
@@ -149,7 +201,7 @@ const Profile = () => {
               </div>
               <div className="flex gap-6 text-center">
                 <div>
-                  <p className="text-2xl font-bold text-gradient">{profileData?.userId ? 0 : 0}</p>
+                  <p className="text-2xl font-bold text-gradient">{tripsData?.length || 0}</p>
                   <p className="text-xs text-muted-foreground">Chuyến đi</p>
                 </div>
                 <div>
@@ -203,13 +255,93 @@ const Profile = () => {
               {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
               Lưu thay đổi
             </Button>
+
+            {/* Password Change Toggle */}
+            <div className="pt-4 border-t border-border">
+              <button
+                type="button"
+                onClick={() => setShowPasswordForm(!showPasswordForm)}
+                className="flex items-center gap-2 text-sm text-primary hover:underline transition-all font-medium"
+              >
+                <Lock className="w-4 h-4" />
+                {showPasswordForm ? "Huỷ đổi mật khẩu" : "Đổi mật khẩu tài khoản"}
+              </button>
+            </div>
+
+            <AnimatePresence>
+              {showPasswordForm && (
+                <motion.form
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: "auto", opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  transition={{ duration: 0.2 }}
+                  onSubmit={handlePasswordChange}
+                  className="space-y-4 overflow-hidden pt-2"
+                >
+                  <div>
+                    <Label className="text-foreground font-medium mb-1.5 block">Mật khẩu hiện tại</Label>
+                    <div className="relative">
+                      <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                      <Input
+                        type="password"
+                        value={oldPassword}
+                        onChange={e => setOldPassword(e.target.value)}
+                        placeholder="Nhập mật khẩu hiện tại"
+                        className="pl-10 h-12 rounded-xl"
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <Label className="text-foreground font-medium mb-1.5 block">Mật khẩu mới</Label>
+                    <div className="relative">
+                      <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                      <Input
+                        type="password"
+                        value={newPassword}
+                        onChange={e => setNewPassword(e.target.value)}
+                        placeholder="Nhập mật khẩu mới (tối thiểu 6 ký tự)"
+                        className="pl-10 h-12 rounded-xl"
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <Label className="text-foreground font-medium mb-1.5 block">Xác nhận mật khẩu mới</Label>
+                    <div className="relative">
+                      <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                      <Input
+                        type="password"
+                        value={confirmPassword}
+                        onChange={e => setConfirmPassword(e.target.value)}
+                        placeholder="Xác nhận lại mật khẩu mới"
+                        className="pl-10 h-12 rounded-xl"
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  <Button
+                    type="submit"
+                    variant="outline"
+                    className="w-full h-12 rounded-xl hover:bg-primary hover:text-primary-foreground border-primary text-primary transition-all"
+                    disabled={changingPassword}
+                  >
+                    {changingPassword ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                    Cập nhật mật khẩu
+                  </Button>
+                </motion.form>
+              )}
+            </AnimatePresence>
           </motion.div>
         </div>
       </div>
 
       {/* Avatar preview modal */}
       <AnimatePresence>
-        {showAvatarPreview && avatarPreviewUrl && (
+        {showAvatarPreview && (avatarPreviewUrl || avatarUrl) && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -224,7 +356,7 @@ const Profile = () => {
               className="bg-card rounded-3xl border border-border shadow-xl p-6 max-w-sm w-full text-center"
               onClick={e => e.stopPropagation()}
             >
-              <img src="/placeholder.svg" alt="Avatar" className="w-48 h-48 rounded-full object-cover mx-auto border-4 border-primary/20 mb-4" />
+              <img src={avatarPreviewUrl || avatarUrl} alt="Avatar" className="w-48 h-48 rounded-full object-cover mx-auto border-4 border-primary/20 mb-4" />
               <p className="text-lg font-semibold text-foreground">{displayName || "Avatar"}</p>
               <Button variant="ghost" size="sm" className="mt-4" onClick={() => setShowAvatarPreview(false)}>
                 Đóng

@@ -1,81 +1,58 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger,
 } from "@/components/ui/dialog";
-import { Users, Trash2, Crown, Copy, Check } from "lucide-react";
+import { Users, Trash2, Crown, UserPlus, Loader2 } from "lucide-react";
 import { toast } from "sonner";
-import { supabase } from "@/config/supabase";
+import { useTripMembers, useAddMember, useRemoveMember } from "@/hooks/useApi";
 import { useAuth } from "@/features/auth/useAuth";
+import { userApi } from "@/integrations/api/modules/user";
+import type { UserProfile } from "@/integrations/api/types";
 
 interface GroupPanelProps {
-  tripId: string;
+  tripId: number;
   isOwner: boolean;
-}
-
-interface Member {
-  id: string;
-  user_id: string;
-  role: string;
-  display_name: string | null;
-  email: string | null;
 }
 
 const GroupPanel = ({ tripId, isOwner }: GroupPanelProps) => {
   const { user } = useAuth();
-  const [members, setMembers] = useState<Member[]>([]);
   const [open, setOpen] = useState(false);
-  const [copied, setCopied] = useState(false);
+  const [addInput, setAddInput] = useState("");
+  const [searchResults, setSearchResults] = useState<UserProfile[]>([]);
 
-  const fetchMembers = async () => {
-    const { data } = await supabase
-      .from("trip_members")
-      .select("id, user_id, role")
-      .eq("trip_id", tripId);
+  const { data: members = [], isLoading } = useTripMembers(open ? tripId : null);
+  const addMemberMutation = useAddMember(tripId);
+  const removeMemberMutation = useRemoveMember(tripId);
 
-    if (data) {
-      const membersWithNames = await Promise.all(
-        data.map(async (m) => {
-          const { data: profile } = await supabase
-            .from("profiles")
-            .select("display_name")
-            .eq("user_id", m.user_id)
-            .single();
-          return {
-            ...m,
-            display_name: profile?.display_name || null,
-            email: null,
-          };
-        })
-      );
-      setMembers(membersWithNames);
+  const handleAddUser = async (userId: number) => {
+    try {
+      await addMemberMutation.mutateAsync({ userId });
+      setAddInput("");
+      setSearchResults([]);
+      toast.success("Đã thêm thành viên");
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { error?: { message?: string } } } })
+        ?.response?.data?.error?.message;
+      toast.error(msg ?? "Không thể thêm thành viên");
     }
   };
 
-  const handleOpen = (isOpen: boolean) => {
-    setOpen(isOpen);
-    if (isOpen) fetchMembers();
-  };
-
-  const copyInviteLink = async () => {
-    const link = `${window.location.origin}/join-trip/${tripId}`;
-    await navigator.clipboard.writeText(link);
-    setCopied(true);
-    toast.success("Đã sao chép link mời!");
-    setTimeout(() => setCopied(false), 2000);
-  };
-
-  const removeMember = async (memberId: string) => {
-    await supabase.from("trip_members").delete().eq("id", memberId);
-    setMembers(prev => prev.filter(m => m.id !== memberId));
-    toast.success("Đã xóa thành viên");
+  const handleRemove = async (memberId: number) => {
+    try {
+      await removeMemberMutation.mutateAsync(memberId);
+      toast.success("Đã xóa thành viên");
+    } catch {
+      toast.error("Không thể xóa thành viên");
+    }
   };
 
   return (
-    <Dialog open={open} onOpenChange={handleOpen}>
+    <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant="soft" size="sm">
-          <Users className="w-4 h-4" /> Nhóm
+        <Button variant="outline" size="sm">
+          <Users className="w-4 h-4 mr-1" /> Nhóm
         </Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-md">
@@ -86,37 +63,84 @@ const GroupPanel = ({ tripId, isOwner }: GroupPanelProps) => {
         </DialogHeader>
 
         <div className="space-y-4">
-          {/* Invite link */}
-          <div className="flex gap-2">
-            <Button variant="outline" className="flex-1" onClick={copyInviteLink}>
-              {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-              {copied ? "Đã sao chép" : "Sao chép link mời"}
-            </Button>
-          </div>
+          {/* Add member (owner only) */}
+          {isOwner && (
+            <div className="relative">
+              <div className="flex gap-2">
+                <Input
+                  placeholder="Tìm kiếm người dùng qua tên hoặc email..."
+                  value={addInput}
+                  onChange={e => {
+                    setAddInput(e.target.value);
+                    if (e.target.value.trim().length > 1) {
+                      userApi.searchUsers(e.target.value).then(setSearchResults).catch(() => setSearchResults([]));
+                    } else {
+                      setSearchResults([]);
+                    }
+                  }}
+                />
+              </div>
+              {searchResults.length > 0 && addInput.trim().length > 1 && (
+                <div className="absolute top-full left-0 right-0 mt-1 bg-card border border-border rounded-xl shadow-lg z-50 max-h-60 overflow-y-auto">
+                  {searchResults.map(u => (
+                    <button
+                      key={u.id}
+                      onClick={() => handleAddUser(u.id)}
+                      className="w-full flex items-center gap-3 p-3 text-left hover:bg-muted transition-colors border-b border-border last:border-0"
+                    >
+                      {u.avatarUrl ? (
+                        <img src={u.avatarUrl} alt="" className="w-8 h-8 rounded-full object-cover" />
+                      ) : (
+                        <div className="w-8 h-8 rounded-full bg-primary/15 flex items-center justify-center text-xs font-bold text-primary">
+                          {(u.fullName || u.email || "U")[0].toUpperCase()}
+                        </div>
+                      )}
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-medium text-foreground truncate">{u.fullName}</p>
+                        <p className="text-xs text-muted-foreground truncate">{u.email}</p>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Members list */}
           <div className="space-y-2">
-            {members.length === 0 ? (
+            {isLoading ? (
+              <div className="flex justify-center py-4">
+                <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+              </div>
+            ) : members.length === 0 ? (
               <p className="text-sm text-muted-foreground text-center py-4">
-                Chưa có thành viên nào. Mời bạn bè tham gia!
+                Chưa có thành viên nào.
               </p>
             ) : (
               members.map(m => (
                 <div key={m.id} className="flex items-center justify-between p-3 rounded-xl bg-muted/50">
                   <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-full bg-gradient-accent flex items-center justify-center text-xs font-bold text-accent-foreground">
-                      {(m.display_name || "?")[0].toUpperCase()}
-                    </div>
+                    {m.avatarUrl ? (
+                      <img src={m.avatarUrl} alt={m.displayName} className="w-8 h-8 rounded-full object-cover" />
+                    ) : (
+                      <div className="w-8 h-8 rounded-full bg-gradient-to-br from-chip-orange to-chip-yellow flex items-center justify-center text-xs font-bold text-white">
+                        {m.displayName[0]?.toUpperCase() ?? "?"}
+                      </div>
+                    )}
                     <div>
-                      <p className="text-sm font-medium text-foreground">{m.display_name || "Chưa đặt tên"}</p>
+                      <p className="text-sm font-medium text-foreground">{m.displayName}</p>
                       <p className="text-xs text-muted-foreground flex items-center gap-1">
-                        {m.role === "owner" && <Crown className="w-3 h-3 text-chip-orange" />}
-                        {m.role === "owner" ? "Trưởng nhóm" : "Thành viên"}
+                        {m.role === "OWNER" && <Crown className="w-3 h-3 text-chip-orange" />}
+                        {m.role === "OWNER" ? "Trưởng nhóm" : "Thành viên"}
                       </p>
                     </div>
                   </div>
-                  {isOwner && m.user_id !== user?.id && (
-                    <button onClick={() => removeMember(m.id)} className="p-1.5 rounded-lg hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-all">
+                  {isOwner && m.role !== "OWNER" && m.userId !== user?.id && (
+                    <button
+                      onClick={() => handleRemove(m.id)}
+                      disabled={removeMemberMutation.isPending}
+                      className="p-1.5 rounded-lg hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-all disabled:opacity-50"
+                    >
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
                   )}

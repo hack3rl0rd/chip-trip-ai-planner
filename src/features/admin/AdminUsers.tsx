@@ -1,41 +1,69 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  Users, Calendar, MapPin, Shield, ArrowLeft, Loader2, TrendingUp,
-  Trash2, BarChart3, Plane, Search, Eye, FileText, Clock, Plus, Save, X,
-  DollarSign, BrainCircuit, CreditCard
+  Users, MapPin, Shield, ArrowLeft, Loader2,
+  Trash2, BarChart3, Plane, Search, Eye,
+  DollarSign, BrainCircuit, CreditCard, Zap,
+  UserX, UserCheck, LogOut, Moon, Sun,
 } from "lucide-react";
-import Navbar from "@/components/Navbar";
 import { useAuth } from "@/features/auth/useAuth";
-import { adminApi, type AdminUserSummary, type AdminTripSummary, type AdminDashboard } from "@/integrations/api/modules/admin";
+import {
+  adminApi,
+  type AdminUserSummary,
+  type AdminTripSummary,
+  type AdminDashboard,
+  type AdminAiUsageLog,
+  type AdminAiCostByProviderMonth,
+} from "@/integrations/api/modules/admin";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Textarea } from "@/components/ui/textarea";
-import { Switch } from "@/components/ui/switch";
 import { format, subDays } from "date-fns";
 import { vi } from "date-fns/locale";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line } from "recharts";
 import { toast } from "sonner";
 
+type AdminTab = "overview" | "trips" | "ai-usage" | "analytics";
+
+const NAV_ITEMS: { key: AdminTab; label: string; icon: React.ElementType }[] = [
+  { key: "overview",   label: "Người dùng",  icon: Users },
+  { key: "trips",      label: "Chuyến đi",   icon: Plane },
+  { key: "ai-usage",   label: "AI Usage",    icon: Zap },
+  { key: "analytics",  label: "Thống kê",    icon: BarChart3 },
+];
+
 const AdminUsers = () => {
   const navigate = useNavigate();
-  const { user, isAdmin: ctxIsAdmin, loading: authLoading } = useAuth();
+  const { user, isAdmin: ctxIsAdmin, loading: authLoading, signOut } = useAuth();
   const [users, setUsers] = useState<AdminUserSummary[]>([]);
   const [trips, setTrips] = useState<AdminTripSummary[]>([]);
+  const [aiLogs, setAiLogs] = useState<AdminAiUsageLog[]>([]);
+  const [aiSummary, setAiSummary] = useState<AdminAiCostByProviderMonth[]>([]);
   const [dashboard, setDashboard] = useState<AdminDashboard | null>(null);
   const [loading, setLoading] = useState(true);
   const [tripsLoading, setTripsLoading] = useState(false);
+  const [aiLoading, setAiLoading] = useState(false);
   const [chartLoading, setChartLoading] = useState(false);
   const [chartData, setChartData] = useState<{ date: string; registrations: number; trips: number }[]>([]);
   const [searchUser, setSearchUser] = useState("");
   const [searchTrip, setSearchTrip] = useState("");
-  const [activeTab, setActiveTab] = useState("overview");
+  const [activeTab, setActiveTab] = useState<AdminTab>("overview");
   const [editingUser, setEditingUser] = useState<AdminUserSummary | null>(null);
   const [editCredits, setEditCredits] = useState("");
+  const [confirmDeactivate, setConfirmDeactivate] = useState<AdminUserSummary | null>(null);
+  const [dark, setDark] = useState(() => document.documentElement.classList.contains("dark"));
+
+  useEffect(() => {
+    if (dark) {
+      document.documentElement.classList.add("dark");
+      localStorage.setItem("chiptrip_theme", "dark");
+    } else {
+      document.documentElement.classList.remove("dark");
+      localStorage.setItem("chiptrip_theme", "light");
+    }
+  }, [dark]);
 
   useEffect(() => {
     if (!authLoading && !user) navigate("/admin/login");
@@ -82,6 +110,23 @@ const AdminUsers = () => {
     setTripsLoading(false);
   };
 
+  const fetchAiUsage = async () => {
+    setAiLoading(true);
+    try {
+      const today = format(new Date(), "yyyy-MM-dd");
+      const from = format(subDays(new Date(), 90), "yyyy-MM-dd");
+      const [logs, summary] = await Promise.all([
+        adminApi.getAiUsages({ size: 50 }),
+        adminApi.getAiUsageSummary(from, today),
+      ]);
+      setAiLogs(logs);
+      setAiSummary(summary);
+    } catch (err) {
+      console.error("Failed to fetch AI usage:", err);
+    }
+    setAiLoading(false);
+  };
+
   const fetchChartData = async () => {
     setChartLoading(true);
     try {
@@ -105,13 +150,13 @@ const AdminUsers = () => {
   };
 
   const handleGrantCredits = async (userId: number) => {
-    const credits = parseInt(editCredits);
-    if (isNaN(credits) || credits <= 0) {
-      toast.error("Số lượng tín dụng không hợp lệ");
+    const amount = parseInt(editCredits);
+    if (isNaN(amount) || amount <= 0) {
+      toast.error("Số lượng tín dụng không hợp lệ (phải > 0)");
       return;
     }
     try {
-      await adminApi.grantCredits(userId, { credits });
+      await adminApi.grantCredits(userId, { amount });
       toast.success("Đã cộng tín dụng AI");
       setEditingUser(null);
       setEditCredits("");
@@ -121,16 +166,25 @@ const AdminUsers = () => {
     }
   };
 
-  const handleToggleUserActive = async (u: AdminUserSummary) => {
+  const handleActivate = async (u: AdminUserSummary) => {
     try {
-      if (u.isActive) {
-        await adminApi.deactivateUser(u.userId);
-      } else {
-        await adminApi.activateUser(u.userId);
-      }
+      await adminApi.toggleStatus(u.id, true);
       fetchUsers();
+      toast.success("Đã kích hoạt tài khoản");
     } catch (err: any) {
       toast.error(err.response?.data?.message || "Lỗi khi cập nhật trạng thái");
+    }
+  };
+
+  const handleDeactivateConfirmed = async () => {
+    if (!confirmDeactivate) return;
+    try {
+      await adminApi.toggleStatus(confirmDeactivate.id, false);
+      setConfirmDeactivate(null);
+      fetchUsers();
+      toast.success("Đã vô hiệu hóa tài khoản");
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || "Lỗi khi vô hiệu hóa");
     }
   };
 
@@ -145,13 +199,14 @@ const AdminUsers = () => {
     }
   };
 
-  const handleTabChange = (tab: string) => {
+  const handleTabChange = (tab: AdminTab) => {
     setActiveTab(tab);
     if (tab === "trips") fetchTrips();
     if (tab === "analytics") { fetchChartData(); fetchDashboard(); }
+    if (tab === "ai-usage") fetchAiUsage();
   };
 
-  if (authLoading || (!ctxIsAdmin && user)) {
+  if (authLoading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <Loader2 className="w-8 h-8 animate-spin text-primary" />
@@ -179,60 +234,118 @@ const AdminUsers = () => {
   );
 
   const filteredTrips = trips.filter(
-    (t) =>
-      t.destination.toLowerCase().includes(searchTrip.toLowerCase())
+    (t) => t.destination.toLowerCase().includes(searchTrip.toLowerCase())
   );
 
+  const currentNav = NAV_ITEMS.find((n) => n.key === activeTab)!;
+
   return (
-    <div className="min-h-screen bg-background">
-      <Navbar />
-      <div className="pt-24 pb-12 px-4 sm:px-6">
-        <div className="container mx-auto max-w-7xl">
-          <button onClick={() => navigate("/")} className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors mb-6">
-            <ArrowLeft className="w-4 h-4" /> Quay lại
+    <div className="min-h-screen bg-background flex">
+      {/* ── Left sidebar ── */}
+      <aside className="w-60 shrink-0 bg-card border-r border-border flex flex-col fixed inset-y-0 left-0 z-30">
+        {/* Logo */}
+        <div className="h-16 flex items-center px-5 border-b border-border">
+          <Link to="/" className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-xl bg-gradient-accent flex items-center justify-center">
+              <MapPin className="w-4 h-4 text-accent-foreground" />
+            </div>
+            <span className="font-display text-lg font-bold text-foreground">
+              Chip<span className="text-gradient">Trip</span>
+            </span>
+          </Link>
+        </div>
+
+        {/* Admin badge */}
+        <div className="px-5 py-2.5 border-b border-border bg-primary/5">
+          <div className="flex items-center gap-2">
+            <Shield className="w-3.5 h-3.5 text-primary" />
+            <span className="text-xs font-semibold text-primary uppercase tracking-wider">Quản trị viên</span>
+          </div>
+        </div>
+
+        {/* Dashboard stats (mini) */}
+        {dashboard && (
+          <div className="px-5 py-3 border-b border-border grid grid-cols-2 gap-2">
+            <div className="bg-muted/50 rounded-xl p-2.5 text-center">
+              <p className="text-lg font-bold text-foreground">{dashboard.totalUsers}</p>
+              <p className="text-[10px] text-muted-foreground">Users</p>
+            </div>
+            <div className="bg-muted/50 rounded-xl p-2.5 text-center">
+              <p className="text-lg font-bold text-foreground">{dashboard.totalTrips}</p>
+              <p className="text-[10px] text-muted-foreground">Trips</p>
+            </div>
+          </div>
+        )}
+
+        {/* Nav */}
+        <nav className="flex-1 px-3 py-3 space-y-0.5 overflow-y-auto">
+          {NAV_ITEMS.map((item) => (
+            <button
+              key={item.key}
+              onClick={() => handleTabChange(item.key)}
+              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors ${
+                activeTab === item.key
+                  ? "bg-primary/10 text-primary"
+                  : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+              }`}
+            >
+              <item.icon className="w-4 h-4 shrink-0" />
+              {item.label}
+            </button>
+          ))}
+        </nav>
+
+        {/* Footer */}
+        <div className="p-3 border-t border-border space-y-0.5">
+          <Link
+            to="/"
+            className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            Trang chủ
+          </Link>
+          <button
+            onClick={() => signOut()}
+            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-destructive hover:bg-destructive/10 transition-colors"
+          >
+            <LogOut className="w-4 h-4" />
+            Đăng xuất
           </button>
+        </div>
+      </aside>
 
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
-            <h1 className="text-3xl font-bold text-foreground mb-2 flex items-center gap-3">
-              <Shield className="w-8 h-8 text-primary" /> Trang quản trị Admin
-            </h1>
-            <p className="text-muted-foreground mb-8">Quản lý toàn diện hệ thống ChipTrip AI</p>
-
-            {/* Stats cards */}
-            {dashboard && (
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
-                {[
-                  { label: "Tổng người dùng", value: dashboard.totalUsers.toLocaleString(), icon: Users, color: "text-primary" },
-                  { label: "Tổng chuyến đi", value: dashboard.totalTrips.toLocaleString(), icon: Plane, color: "text-green-500" },
-                  { label: "AI calls tháng này", value: dashboard.aiCallsThisMonth.toLocaleString(), icon: BrainCircuit, color: "text-blue-500" },
-                  { label: "Chi phí AI (USD)", value: `$${Number(dashboard.aiCostUsdThisMonth).toFixed(2)}`, icon: DollarSign, color: "text-purple-500" },
-                ].map((stat, i) => (
-                  <motion.div
-                    key={stat.label}
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: i * 0.08 }}
-                    className="bg-card rounded-2xl border border-border p-5 shadow-sm"
-                  >
-                    <stat.icon className={`w-5 h-5 ${stat.color} mb-2`} />
-                    <p className="text-3xl font-bold text-foreground">{stat.value}</p>
-                    <p className="text-xs text-muted-foreground mt-1">{stat.label}</p>
-                  </motion.div>
-                ))}
+      {/* ── Main content ── */}
+      <div className="flex-1 ml-60 flex flex-col min-h-screen">
+        {/* Top header */}
+        <header className="h-16 bg-card border-b border-border flex items-center justify-between px-6 sticky top-0 z-20">
+          <div className="flex items-center gap-2">
+            <currentNav.icon className="w-5 h-5 text-primary" />
+            <h1 className="text-base font-semibold text-foreground">{currentNav.label}</h1>
+          </div>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setDark(!dark)}
+              className="w-8 h-8 rounded-xl flex items-center justify-center hover:bg-muted transition-colors text-muted-foreground"
+              aria-label="Toggle dark mode"
+            >
+              {dark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+            </button>
+            <div className="flex items-center gap-2">
+              <div className="w-7 h-7 rounded-full bg-primary/15 flex items-center justify-center text-xs font-bold text-primary">
+                {(user?.fullName || user?.email || "A")[0].toUpperCase()}
               </div>
-            )}
+              <span className="text-sm text-muted-foreground hidden sm:block">{user?.email}</span>
+            </div>
+          </div>
+        </header>
 
-            {/* Tabs */}
-            <Tabs value={activeTab} onValueChange={handleTabChange}>
-              <TabsList className="mb-6 flex-wrap h-auto gap-1">
-                <TabsTrigger value="overview" className="gap-2"><Users className="w-4 h-4" /> Người dùng</TabsTrigger>
-                <TabsTrigger value="trips" className="gap-2"><Plane className="w-4 h-4" /> Chuyến đi</TabsTrigger>
-                <TabsTrigger value="analytics" className="gap-2"><BarChart3 className="w-4 h-4" /> Thống kê</TabsTrigger>
-              </TabsList>
+        <main className="flex-1 p-6">
+          <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}>
 
-              {/* USERS TAB */}
-              <TabsContent value="overview">
-                {/* Edit user modal */}
+            {/* ── USERS TAB ── */}
+            {activeTab === "overview" && (
+              <>
+                {/* Grant credits modal */}
                 <AnimatePresence>
                   {editingUser && (
                     <motion.div
@@ -248,18 +361,14 @@ const AdminUsers = () => {
                         className="bg-card rounded-2xl border border-border shadow-xl p-6 max-w-sm w-full"
                         onClick={(e) => e.stopPropagation()}
                       >
-                        <div className="flex items-center justify-between mb-4">
-                          <h3 className="font-semibold text-foreground">Cộng tín dụng AI</h3>
-                          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { setEditingUser(null); setEditCredits(""); }}>
-                            <X className="w-4 h-4" />
-                          </Button>
-                        </div>
+                        <h3 className="font-semibold text-foreground mb-1">Cộng tín dụng AI</h3>
                         <p className="text-sm text-muted-foreground mb-2">{editingUser.email}</p>
-                        <p className="text-sm mb-4">Tín dụng hiện tại: <span className="font-bold text-foreground">{editingUser.aiCredits}</span></p>
+                        <p className="text-sm mb-4">Hiện tại: <span className="font-bold text-foreground">{editingUser.aiCredits}</span></p>
                         <div className="space-y-3">
                           <div className="space-y-1.5">
-                            <label className="text-sm font-medium text-foreground">Số tín dụng muốn cộng</label>
+                            <label htmlFor="credits-input" className="text-sm font-medium text-foreground">Số tín dụng muốn cộng</label>
                             <Input
+                              id="credits-input"
                               type="number"
                               placeholder="VD: 10"
                               value={editCredits}
@@ -267,8 +376,62 @@ const AdminUsers = () => {
                               min="1"
                             />
                           </div>
-                          <Button className="w-full" onClick={() => handleGrantCredits(editingUser.userId)}>
+                          <Button className="w-full" onClick={() => handleGrantCredits(editingUser.id)}>
                             <CreditCard className="w-4 h-4 mr-2" /> Cộng tín dụng
+                          </Button>
+                          <Button variant="ghost" className="w-full" onClick={() => { setEditingUser(null); setEditCredits(""); }}>
+                            Huỷ
+                          </Button>
+                        </div>
+                      </motion.div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
+                {/* Deactivate confirmation modal */}
+                <AnimatePresence>
+                  {confirmDeactivate && (
+                    <motion.div
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
+                      onClick={() => setConfirmDeactivate(null)}
+                    >
+                      <motion.div
+                        initial={{ scale: 0.9, opacity: 0 }}
+                        animate={{ scale: 1, opacity: 1 }}
+                        className="bg-card rounded-2xl border border-border shadow-xl p-6 max-w-sm w-full"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <div className="flex items-center gap-3 mb-3">
+                          <div className="w-10 h-10 rounded-full bg-destructive/10 flex items-center justify-center shrink-0">
+                            <UserX className="w-5 h-5 text-destructive" />
+                          </div>
+                          <div>
+                            <h3 className="font-semibold text-foreground">Vô hiệu hóa tài khoản?</h3>
+                            <p className="text-xs text-muted-foreground mt-0.5">Hành động này không thể hoàn tác tức thì</p>
+                          </div>
+                        </div>
+                        <p className="text-sm text-muted-foreground mb-1">Tài khoản sẽ bị khóa:</p>
+                        <p className="text-sm font-medium text-foreground mb-1">{confirmDeactivate.fullName || "Chưa đặt tên"}</p>
+                        <p className="text-xs text-muted-foreground mb-5">{confirmDeactivate.email}</p>
+                        <p className="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 rounded-lg px-3 py-2 mb-4">
+                          Người dùng sẽ bị đăng xuất ngay lập tức và không thể đăng nhập lại cho đến khi được kích hoạt trở lại.
+                        </p>
+                        <div className="flex gap-2">
+                          <Button
+                            variant="ghost"
+                            className="flex-1"
+                            onClick={() => setConfirmDeactivate(null)}
+                          >
+                            Hủy
+                          </Button>
+                          <Button
+                            className="flex-1 bg-destructive hover:bg-destructive/90 text-destructive-foreground"
+                            onClick={handleDeactivateConfirmed}
+                          >
+                            <UserX className="w-4 h-4 mr-1.5" /> Vô hiệu hóa
                           </Button>
                         </div>
                       </motion.div>
@@ -279,9 +442,16 @@ const AdminUsers = () => {
                 <div className="mb-4">
                   <div className="relative max-w-sm">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                    <Input placeholder="Tìm theo tên hoặc email..." value={searchUser} onChange={(e) => setSearchUser(e.target.value)} className="pl-10" />
+                    <Input
+                      placeholder="Tìm theo tên hoặc email..."
+                      value={searchUser}
+                      onChange={(e) => setSearchUser(e.target.value)}
+                      className="pl-10"
+                      aria-label="Tìm kiếm người dùng"
+                    />
                   </div>
                 </div>
+
                 {loading ? (
                   <div className="flex items-center justify-center py-20"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>
                 ) : (
@@ -289,7 +459,7 @@ const AdminUsers = () => {
                     <Table>
                       <TableHeader>
                         <TableRow>
-                          <TableHead className="w-12">#</TableHead>
+                          <TableHead className="w-10">#</TableHead>
                           <TableHead>Người dùng</TableHead>
                           <TableHead className="hidden sm:table-cell">Email</TableHead>
                           <TableHead className="hidden md:table-cell">Đăng ký</TableHead>
@@ -301,7 +471,7 @@ const AdminUsers = () => {
                       </TableHeader>
                       <TableBody>
                         {filteredUsers.map((u, idx) => (
-                          <TableRow key={u.userId}>
+                          <TableRow key={u.id} className={!u.isActive ? "opacity-60" : ""}>
                             <TableCell className="text-muted-foreground font-mono text-xs">{idx + 1}</TableCell>
                             <TableCell>
                               <div className="flex items-center gap-3">
@@ -315,10 +485,8 @@ const AdminUsers = () => {
                                 <div>
                                   <div className="flex items-center gap-2">
                                     <p className="font-medium text-foreground text-sm">{u.fullName || "Chưa đặt tên"}</p>
-                                    {u.role === "ADMIN" && (
-                                      <Badge className="text-[10px] px-1.5 py-0 h-4 bg-primary/15 text-primary border-0">
-                                        Admin
-                                      </Badge>
+                                    {u.role === "ROLE_ADMIN" && (
+                                      <Badge className="text-[10px] px-1.5 py-0 h-4 bg-primary/15 text-primary border-0">Admin</Badge>
                                     )}
                                   </div>
                                   <p className="text-xs text-muted-foreground sm:hidden">{u.email}</p>
@@ -336,32 +504,51 @@ const AdminUsers = () => {
                               <button
                                 onClick={() => { setEditingUser(u); setEditCredits(""); }}
                                 className="inline-flex items-center gap-1 text-xs font-semibold text-blue-600 hover:text-blue-800 transition-colors"
+                                aria-label={`Cộng credits cho ${u.email}`}
                               >
                                 <BrainCircuit className="w-3 h-3" /> {u.aiCredits}
                               </button>
                             </TableCell>
                             <TableCell className="text-center">
-                              <button
-                                onClick={() => handleToggleUserActive(u)}
-                                className={`inline-flex items-center gap-1 text-xs font-semibold px-2 py-1 rounded-full transition-colors ${
-                                  u.isActive
-                                    ? "bg-green-100 text-green-700 hover:bg-green-200"
-                                    : "bg-red-100 text-red-700 hover:bg-red-200"
-                                }`}
-                              >
+                              <span className={`inline-flex items-center text-xs font-semibold px-2 py-1 rounded-full ${
+                                u.isActive
+                                  ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+                                  : "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"
+                              }`}>
                                 {u.isActive ? "Hoạt động" : "Vô hiệu"}
-                              </button>
+                              </span>
                             </TableCell>
                             <TableCell className="text-center">
                               <div className="flex items-center justify-center gap-1">
+                                {u.isActive ? (
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-8 px-2 text-xs text-destructive hover:text-destructive hover:bg-destructive/10 gap-1"
+                                    onClick={() => setConfirmDeactivate(u)}
+                                    aria-label={`Vô hiệu hóa tài khoản ${u.email}`}
+                                  >
+                                    <UserX className="w-3.5 h-3.5" /> Khóa
+                                  </Button>
+                                ) : (
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-8 px-2 text-xs text-green-600 hover:text-green-700 hover:bg-green-50 gap-1"
+                                    onClick={() => handleActivate(u)}
+                                    aria-label={`Kích hoạt tài khoản ${u.email}`}
+                                  >
+                                    <UserCheck className="w-3.5 h-3.5" /> Kích hoạt
+                                  </Button>
+                                )}
                                 <Button
                                   variant="ghost"
                                   size="icon"
                                   className="h-8 w-8"
                                   onClick={() => { setEditingUser(u); setEditCredits(""); }}
-                                  title="Cộng tín dụng AI"
+                                  aria-label={`Cộng tín dụng AI cho ${u.email}`}
                                 >
-                                  <CreditCard className="w-4 h-4" />
+                                  <CreditCard className="w-3.5 h-3.5" />
                                 </Button>
                               </div>
                             </TableCell>
@@ -369,17 +556,27 @@ const AdminUsers = () => {
                         ))}
                       </TableBody>
                     </Table>
-                    {filteredUsers.length === 0 && <div className="text-center py-12 text-muted-foreground">Không tìm thấy người dùng nào</div>}
+                    {filteredUsers.length === 0 && (
+                      <div className="text-center py-12 text-muted-foreground">Không tìm thấy người dùng nào</div>
+                    )}
                   </motion.div>
                 )}
-              </TabsContent>
+              </>
+            )}
 
-              {/* TRIPS TAB */}
-              <TabsContent value="trips">
+            {/* ── TRIPS TAB ── */}
+            {activeTab === "trips" && (
+              <>
                 <div className="mb-4">
                   <div className="relative max-w-sm">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                    <Input placeholder="Tìm theo điểm đến..." value={searchTrip} onChange={(e) => setSearchTrip(e.target.value)} className="pl-10" />
+                    <Input
+                      placeholder="Tìm theo điểm đến..."
+                      value={searchTrip}
+                      onChange={(e) => setSearchTrip(e.target.value)}
+                      className="pl-10"
+                      aria-label="Tìm kiếm chuyến đi"
+                    />
                   </div>
                 </div>
                 {tripsLoading ? (
@@ -389,9 +586,9 @@ const AdminUsers = () => {
                     <Table>
                       <TableHeader>
                         <TableRow>
-                          <TableHead className="w-12">#</TableHead>
+                          <TableHead className="w-10">#</TableHead>
                           <TableHead>Điểm đến</TableHead>
-                          <TableHead className="hidden sm:table-cell">Ngày tạo</TableHead>
+                          <TableHead className="hidden sm:table-cell">Tạo lúc</TableHead>
                           <TableHead className="hidden md:table-cell">Thời gian</TableHead>
                           <TableHead className="text-center hidden sm:table-cell">Người đi</TableHead>
                           <TableHead className="text-right">Hành động</TableHead>
@@ -429,10 +626,22 @@ const AdminUsers = () => {
                             </TableCell>
                             <TableCell className="text-right">
                               <div className="flex items-center justify-end gap-1">
-                                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => window.open(`/result?id=${t.id}`, "_blank")}>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8"
+                                  onClick={() => window.open(`/result?id=${t.id}`, "_blank")}
+                                  aria-label="Xem chi tiết chuyến đi"
+                                >
                                   <Eye className="w-4 h-4" />
                                 </Button>
-                                <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" onClick={() => handleDeleteTrip(t.id)}>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8 text-destructive hover:text-destructive"
+                                  onClick={() => handleDeleteTrip(t.id)}
+                                  aria-label="Xóa chuyến đi"
+                                >
                                   <Trash2 className="w-4 h-4" />
                                 </Button>
                               </div>
@@ -441,39 +650,151 @@ const AdminUsers = () => {
                         ))}
                       </TableBody>
                     </Table>
-                    {filteredTrips.length === 0 && !tripsLoading && <div className="text-center py-12 text-muted-foreground">Không có chuyến đi nào</div>}
+                    {filteredTrips.length === 0 && !tripsLoading && (
+                      <div className="text-center py-12 text-muted-foreground">Không có chuyến đi nào</div>
+                    )}
                   </motion.div>
                 )}
-              </TabsContent>
+              </>
+            )}
 
-              {/* ANALYTICS TAB */}
-              <TabsContent value="analytics">
+            {/* ── AI USAGE TAB ── */}
+            {activeTab === "ai-usage" && (
+              aiLoading ? (
+                <div className="flex items-center justify-center py-20"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>
+              ) : (
+                <div className="space-y-6">
+                  {aiSummary.length > 0 && (
+                    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="bg-card rounded-2xl border border-border shadow-sm p-6">
+                      <h3 className="text-lg font-semibold text-foreground mb-1">Chi phí theo provider (90 ngày)</h3>
+                      <p className="text-sm text-muted-foreground mb-6">Tổng hợp theo provider và tháng</p>
+                      <ResponsiveContainer width="100%" height={220}>
+                        <BarChart data={aiSummary}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                          <XAxis dataKey="month" tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" />
+                          <YAxis tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" />
+                          <Tooltip
+                            contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 12, fontSize: 13 }}
+                            formatter={(v: number) => [`$${Number(v).toFixed(4)}`, "Chi phí USD"]}
+                          />
+                          <Bar dataKey="totalCostUsd" name="Chi phí USD" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                      <div className="mt-4 grid grid-cols-2 sm:grid-cols-4 gap-3">
+                        {aiSummary.map((s, i) => (
+                          <div key={i} className="bg-muted/50 rounded-xl p-3 text-sm">
+                            <p className="font-semibold text-foreground">{s.provider}</p>
+                            <p className="text-muted-foreground text-xs">{s.month}</p>
+                            <p className="font-bold text-primary mt-1">${Number(s.totalCostUsd).toFixed(4)}</p>
+                            <p className="text-xs text-muted-foreground">{s.usageCount} lần gọi</p>
+                          </div>
+                        ))}
+                      </div>
+                    </motion.div>
+                  )}
+                  <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="bg-card rounded-2xl border border-border shadow-sm overflow-hidden">
+                    <div className="px-5 py-4 border-b border-border">
+                      <h3 className="font-semibold text-foreground">Log gần nhất (50 entries)</h3>
+                    </div>
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Thời gian</TableHead>
+                          <TableHead>Người dùng</TableHead>
+                          <TableHead className="hidden sm:table-cell">Provider</TableHead>
+                          <TableHead className="text-right hidden md:table-cell">Tokens In</TableHead>
+                          <TableHead className="text-right hidden md:table-cell">Tokens Out</TableHead>
+                          <TableHead className="text-right">Chi phí (USD)</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {aiLogs.map((log) => (
+                          <TableRow key={log.id}>
+                            <TableCell className="text-xs text-muted-foreground">
+                              {format(new Date(log.createdAt), "dd/MM HH:mm", { locale: vi })}
+                            </TableCell>
+                            <TableCell className="text-sm">
+                              <p className="font-medium text-foreground">{log.userFullName || "—"}</p>
+                              <p className="text-xs text-muted-foreground">{log.userEmail}</p>
+                            </TableCell>
+                            <TableCell className="hidden sm:table-cell">
+                              <Badge variant="secondary" className="text-xs">{log.provider}</Badge>
+                            </TableCell>
+                            <TableCell className="text-right hidden md:table-cell text-xs text-muted-foreground">
+                              {log.tokensIn.toLocaleString()}
+                            </TableCell>
+                            <TableCell className="text-right hidden md:table-cell text-xs text-muted-foreground">
+                              {log.tokensOut.toLocaleString()}
+                            </TableCell>
+                            <TableCell className="text-right text-sm font-mono">
+                              ${Number(log.costUsd).toFixed(4)}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                    {aiLogs.length === 0 && (
+                      <div className="text-center py-12 text-muted-foreground">Chưa có log AI usage</div>
+                    )}
+                  </motion.div>
+                </div>
+              )
+            )}
+
+            {/* ── ANALYTICS TAB ── */}
+            {activeTab === "analytics" && (
+              <>
+                {/* Dashboard stat cards */}
+                {dashboard && (
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
+                    {[
+                      { label: "Tổng người dùng", value: dashboard.totalUsers.toLocaleString(), icon: Users, color: "text-primary" },
+                      { label: "Tổng chuyến đi", value: dashboard.totalTrips.toLocaleString(), icon: Plane, color: "text-green-500" },
+                      { label: "AI calls tháng này", value: dashboard.aiCallsThisMonth.toLocaleString(), icon: BrainCircuit, color: "text-blue-500" },
+                      { label: "Chi phí AI (USD)", value: `$${Number(dashboard.aiCostUsdThisMonth).toFixed(2)}`, icon: DollarSign, color: "text-purple-500" },
+                    ].map((stat, i) => (
+                      <motion.div
+                        key={stat.label}
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: i * 0.08 }}
+                        className="bg-card rounded-2xl border border-border p-5 shadow-sm"
+                      >
+                        <stat.icon className={`w-5 h-5 ${stat.color} mb-2`} />
+                        <p className="text-3xl font-bold text-foreground">{stat.value}</p>
+                        <p className="text-xs text-muted-foreground mt-1">{stat.label}</p>
+                      </motion.div>
+                    ))}
+                  </div>
+                )}
                 {chartLoading ? (
                   <div className="flex items-center justify-center py-20"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>
                 ) : chartData.length > 0 ? (
-                  <div className="space-y-6">
-                    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="bg-card rounded-2xl border border-border shadow-sm p-6">
-                      <h3 className="text-lg font-semibold text-foreground mb-1">Đăng ký & Chuyến đi (30 ngày)</h3>
-                      <p className="text-sm text-muted-foreground mb-6">Xu hướng hoạt động trong 30 ngày gần nhất</p>
-                      <ResponsiveContainer width="100%" height={300}>
-                        <LineChart data={chartData}>
-                          <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                          <XAxis dataKey="date" tick={{ fontSize: 11 }} tickFormatter={(v) => v.slice(5)} stroke="hsl(var(--muted-foreground))" />
-                          <YAxis tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" />
-                          <Tooltip contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 12, fontSize: 13 }} labelFormatter={(v) => `Ngày: ${v}`} />
-                          <Line type="monotone" dataKey="registrations" name="Đăng ký" stroke="hsl(var(--primary))" strokeWidth={2} dot={false} />
-                          <Line type="monotone" dataKey="trips" name="Chuyến đi" stroke="#22c55e" strokeWidth={2} dot={false} />
-                        </LineChart>
-                      </ResponsiveContainer>
-                    </motion.div>
-                  </div>
+                  <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="bg-card rounded-2xl border border-border shadow-sm p-6">
+                    <h3 className="text-lg font-semibold text-foreground mb-1">Đăng ký & Chuyến đi (30 ngày)</h3>
+                    <p className="text-sm text-muted-foreground mb-6">Xu hướng hoạt động trong 30 ngày gần nhất</p>
+                    <ResponsiveContainer width="100%" height={300}>
+                      <LineChart data={chartData}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                        <XAxis dataKey="date" tick={{ fontSize: 11 }} tickFormatter={(v) => v.slice(5)} stroke="hsl(var(--muted-foreground))" />
+                        <YAxis tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" />
+                        <Tooltip
+                          contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 12, fontSize: 13 }}
+                          labelFormatter={(v) => `Ngày: ${v}`}
+                        />
+                        <Line type="monotone" dataKey="registrations" name="Đăng ký" stroke="hsl(var(--primary))" strokeWidth={2} dot={false} />
+                        <Line type="monotone" dataKey="trips" name="Chuyến đi" stroke="#22c55e" strokeWidth={2} dot={false} />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </motion.div>
                 ) : (
                   <div className="text-center py-20 text-muted-foreground">Không có dữ liệu thống kê</div>
                 )}
-              </TabsContent>
-            </Tabs>
+              </>
+            )}
+
           </motion.div>
-        </div>
+        </main>
       </div>
     </div>
   );

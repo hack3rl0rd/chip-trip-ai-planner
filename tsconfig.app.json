@@ -18,7 +18,7 @@
     "skipLibCheck": true,
     "strict": true,
     "target": "ES2020",
-    "types": ["vitest/globals"],
+    "types": ["vitest/globals", "google.maps"],
     "useDefineForClassFields": true
   },
   "include": ["src"]

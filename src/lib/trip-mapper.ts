@@ -1,5 +1,5 @@
 import type { TripDetail, TripGenerateResponse, TripSummary } from "@/integrations/api/types";
-import type { TripPlan, TripItem, TripDay } from "@/lib/trip-data";
+import type { TripPlan, TripItem, TripDay } from "@/features/planning/trip-data";
 
 function formatVnd(vnd: number | null | undefined): string {
   if (!vnd || vnd === 0) return "Miễn phí";
@@ -41,11 +41,14 @@ export function mapTripDetailToPlan(detail: TripDetail | TripGenerateResponse): 
       desc: act.description || "",
       cost: formatVnd(act.costVnd),
       image: act.imageUrl || "/placeholder.svg",
-      address: act.latitude && act.longitude ? `${act.latitude}, ${act.longitude}` : undefined,
+      address: act.address || (act.latitude && act.longitude ? `${act.latitude}, ${act.longitude}` : undefined),
+      lat: act.latitude ?? undefined,
+      lng: act.longitude ?? undefined,
       rating: undefined,
       tips: undefined,
       bookingUrl: act.bookingUrl || undefined,
       bookingType: act.type as TripItem["bookingType"],
+      placeCacheId: act.placeCacheId ?? undefined,
     }));
 
     return {

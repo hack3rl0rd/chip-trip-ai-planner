@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
-import { Search, CalendarDays, ArrowRight, ArrowLeft, Sparkles, Loader2, Check, ArrowLeftRight, MapPin, Users, Wallet } from "lucide-react";
+import { Search, CalendarDays, ArrowRight, ArrowLeft, Sparkles, Loader2, Check, ArrowLeftRight, MapPin, Users, Wallet, AlertCircle, RotateCcw } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import { useAuth } from "@/features/auth/useAuth";
 import { tripsApi } from "@/integrations/api";
@@ -102,6 +102,7 @@ const Planning = () => {
   const [originFocused, setOriginFocused] = useState(false);
   const [destFocused, setDestFocused] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   // Suggest flow state
   const [vibes, setVibes] = useState<string[]>([]);
@@ -152,16 +153,16 @@ const Planning = () => {
       const budgetText = budgetLabels[suggestBudget[0]] || "3-5M";
 
       const { data } = await tripsApi.generate({
-        origin: "Hà Nội",
+        departure: "Hà Nội",
         destination: "Đà Nẵng",
         tripType: "roundtrip",
         startDate: new Date().toISOString().slice(0, 10),
         endDate: new Date().toISOString().slice(0, 10),
         departureTime,
         returnTime,
-        budget: suggestBudget[0],
+        budgetVnd: BUDGET_VND_MAP[suggestBudget[0]] ?? 4_000_000,
         styles: vibes,
-        travelers: 2,
+        peopleCount: 2,
         tickets: 2,
       });
 
@@ -185,20 +186,32 @@ const Planning = () => {
     setSuggestedPlaces([]);
   };
 
+  const BUDGET_VND_MAP = [400_000, 750_000, 1_500_000, 2_500_000, 4_000_000, 6_500_000, 10_000_000, 15_000_000];
+
   const handleGenerate = async () => {
+    const budgetVnd = budgetInput
+      ? parseInt(budgetInput.replace(/\D/g, ""), 10)
+      : (BUDGET_VND_MAP[budget[0]] ?? 4_000_000);
+
+    if (!budgetVnd || budgetVnd <= 0) {
+      toast.error("Ngân sách không hợp lệ");
+      return;
+    }
+
     setIsLoading(true);
+    setError(null);
     try {
       const data = await tripsApi.generate({
-        origin,
+        departure: origin,
         destination,
         tripType: "roundtrip",
         startDate: dates.start,
         endDate: dates.end,
         departureTime,
         returnTime,
-        budget: budget[0],
+        budgetVnd,
         styles,
-        travelers,
+        peopleCount: travelers,
         tickets: travelers,
       });
 
@@ -212,8 +225,13 @@ const Planning = () => {
       navigate("/result", { state: { trip, tripId: data.id } });
     } catch (err: any) {
       console.error("AI generation failed:", err);
-      const msg = err.response?.data?.message || err.message || "Tạo lịch trình thất bại, vui lòng thử lại";
-      toast.error(msg);
+      const isTimeout = err.code === "ECONNABORTED" || err.message?.includes("timeout");
+      const msg = isTimeout
+        ? "AI mất quá nhiều thời gian xử lý. Lịch trình có thể đã được tạo — kiểm tra trong 'Chuyến đi của tôi', hoặc thử lại."
+        : err.response?.data?.message || err.message || "Tạo lịch trình thất bại, vui lòng thử lại";
+      setError(msg);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -537,6 +555,24 @@ const Planning = () => {
                 </div>
                 <h2 className="text-2xl font-bold text-foreground">AI đang tạo lịch trình...</h2>
                 <p className="text-muted-foreground">Chip Trip đang tìm kiếm lịch trình hoàn hảo cho <span className="font-semibold text-chip-orange">{destination}</span></p>
+              </motion.div>
+            ) : error ? (
+              <motion.div key="error" initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="flex flex-col items-center justify-center min-h-[60vh] gap-6 text-center">
+                <div className="w-20 h-20 rounded-full bg-destructive/10 flex items-center justify-center">
+                  <AlertCircle className="w-10 h-10 text-destructive" />
+                </div>
+                <div className="space-y-2">
+                  <h2 className="text-2xl font-bold text-foreground">Tạo lịch trình thất bại</h2>
+                  <p className="text-muted-foreground max-w-sm">{error}</p>
+                </div>
+                <div className="flex items-center gap-3">
+                  <Button variant="ghost" onClick={() => { setError(null); setBranch(null); setKnownStep(0); }}>
+                    <ArrowLeft className="w-4 h-4" /> Quay lại
+                  </Button>
+                  <Button variant="hero" onClick={() => { setError(null); handleGenerate(); }}>
+                    <RotateCcw className="w-4 h-4" /> Thử lại
+                  </Button>
+                </div>
               </motion.div>
             ) : branch === null ? (
               renderBranchSelection()

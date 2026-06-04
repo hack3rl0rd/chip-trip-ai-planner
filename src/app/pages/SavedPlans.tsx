@@ -32,6 +32,7 @@ const SavedPlans = () => {
 
   const trips = (tripsData || []).map((t) => ({
     id: String(t.id),
+    imageUrl: t.imageUrl || null,
     trip: {
       id: String(t.id),
       destination: t.destination,
@@ -40,7 +41,7 @@ const SavedPlans = () => {
       totalCost: t.totalCostVnd ? `${(t.totalCostVnd / 1_000_000).toFixed(1)}M` : "~0",
       rating: 4.8,
       duration: "",
-      image: "/placeholder.svg",
+      image: t.imageUrl || "/placeholder.svg",
       tags: t.styles ? (() => { try { return JSON.parse(t.styles); } catch { return []; } })() : [],
       dateRange: t.dateStart && t.dateEnd
         ? `${new Date(t.dateStart).toLocaleDateString("vi-VN")} - ${new Date(t.dateEnd).toLocaleDateString("vi-VN")}`
@@ -76,8 +77,8 @@ const SavedPlans = () => {
     }
   };
 
-  const getImage = (trip: TripPlan) => {
-    return trip.image || trip.days?.[0]?.items?.[0]?.image || getPlaceImage(trip.destination || trip.title, "attraction", 600, 400);
+  const getImage = (trip: TripPlan, imageUrl?: string | null) => {
+    return imageUrl || trip.image || getPlaceImage(trip.destination || trip.title, "attraction", 600, 400);
   };
 
   return (
@@ -111,7 +112,7 @@ const SavedPlans = () => {
           ) : (
             <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
               <AnimatePresence>
-                {trips.map(({ id, trip }, i) => (
+                {trips.map(({ id, trip, imageUrl }, i) => (
                   <motion.div
                     key={id}
                     initial={{ opacity: 0, y: 20 }}
@@ -121,7 +122,7 @@ const SavedPlans = () => {
                     className="group bg-card rounded-2xl border border-border overflow-hidden shadow-card hover:shadow-warm transition-all duration-300 hover:-translate-y-1"
                   >
                     <div className="relative h-44 overflow-hidden">
-                      <img src={getImage(trip)} alt={trip.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                      <img src={getImage(trip, imageUrl)} alt={trip.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
                       <div className="absolute top-3 right-3 flex gap-1.5">
                         {trip.tags?.slice(0, 2).map((tag) => (
                           <span key={tag} className="px-2.5 py-1 rounded-full bg-background/80 backdrop-blur-sm text-xs font-medium text-foreground">{tag}</span>
@@ -147,7 +148,7 @@ const SavedPlans = () => {
                         <span className="ml-auto font-semibold text-chip-orange">{trip.totalCost}</span>
                       </div>
                       <div className="flex gap-2">
-                        <Button variant="soft" size="sm" className="flex-1" onClick={() => navigate(`/result?id=${id}`, { state: { trip } })}>
+                        <Button variant="soft" size="sm" className="flex-1" onClick={() => navigate(`/result?id=${id}`)}>
                           <Eye className="w-3.5 h-3.5" /> Xem lại
                         </Button>
                         <Button variant="outline" size="sm" onClick={() => handleShareTrip(id, trip.title)} title="Chia sẻ">

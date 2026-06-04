@@ -6,6 +6,7 @@ import { MapPin, Clock, Wallet, Star, Bookmark, Share2, Check, Download, Externa
 import { useState, useEffect, useRef, useCallback } from "react";
 import { toast } from "sonner";
 import Navbar from "@/components/Navbar";
+import GoongMap, { type GoongMapPin } from "@/components/GoongMap";
 import { generateTrip, generatePackingList, type TripPlan, type TripItem } from "@/features/planning/trip-data";
 import { getPlaceImage } from "@/features/planning/place-image";
 import PackingList from "@/features/result/PackingList";
@@ -18,6 +19,7 @@ import { useAuth } from "@/features/auth/useAuth";
 import { tripsApi } from "@/integrations/api";
 import { useTripDetail, useSharedTrip, useCloneTrip, useEnableShare } from "@/hooks/useApi";
 import { mapTripDetailToPlan } from "@/lib/trip-mapper";
+import { getDirection, getConsecutiveTravelTimes, formatDuration, formatDistance } from "@/lib/goong";
 import ChipMascot from "@/features/result/ChipMascot";
 
 const bookingIcons: Record<string, React.ElementType> = {
@@ -43,6 +45,8 @@ const Result = () => {
   const dayButtonRefs = useRef<(HTMLButtonElement | null)[]>([]);
   const [isSharedView, setIsSharedView] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [routePolylines, setRoutePolylines] = useState<Array<[number, number][]>>([]);
+  const [travelTimes, setTravelTimes] = useState<Record<string, { duration: number; distance: number }>>({});
 
   const tripIdFromState = (state as any)?.tripId as number | null;
   const tripFromState = (state as any)?.trip as TripPlan | null;
@@ -83,6 +87,46 @@ const Result = () => {
     }
   }, [tripFromState, sharedTrip, remoteTrip, tripIdFromState]);
 
+  // Fetch Direction polylines for all map pins (runs once when trip loads)
+  useEffect(() => {
+    if (mapPins.length < 2) return;
+    let cancelled = false;
+    (async () => {
+      const results = await Promise.all(
+        mapPins.slice(0, -1).map((pin, i) =>
+          getDirection({ lat: pin.lat, lng: pin.lng }, { lat: mapPins[i + 1].lat, lng: mapPins[i + 1].lng })
+        )
+      );
+      if (!cancelled) setRoutePolylines(results.map(r => r?.polyline ?? []));
+    })();
+    return () => { cancelled = true; };
+  // mapPins are stable once trip is set
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [trip]);
+
+  // Fetch Distance Matrix for the active day's consecutive geocoded activities
+  useEffect(() => {
+    if (!trip) return;
+    const dayItems = trip.days[activeDay]?.items ?? [];
+    const geoItems = dayItems.map((item, idx) => ({ item, idx })).filter(({ item }) => item.lat && item.lng);
+    if (geoItems.length < 2) return;
+    let cancelled = false;
+    (async () => {
+      const segments = await getConsecutiveTravelTimes(
+        geoItems.map(({ item }) => ({ lat: item.lat!, lng: item.lng! }))
+      );
+      if (cancelled) return;
+      setTravelTimes(prev => {
+        const next = { ...prev };
+        geoItems.slice(0, -1).forEach(({ idx }, i) => {
+          if (segments[i]) next[`${activeDay}-${idx}`] = segments[i]!;
+        });
+        return next;
+      });
+    })();
+    return () => { cancelled = true; };
+  }, [trip, activeDay]);
+
   const handleDayClick = useCallback((dayIdx: number) => {
     setActiveDay(dayIdx);
     const btn = dayButtonRefs.current[dayIdx];
@@ -90,6 +134,15 @@ const Result = () => {
       btn.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
     }
   }, []);
+
+  useEffect(() => {
+    if (dbTripId) {
+      try {
+        const stored = localStorage.getItem(`chip-completed-${dbTripId}`);
+        if (stored) setCompletedItems(new Set(JSON.parse(stored)));
+      } catch {}
+    }
+  }, [dbTripId]);
 
   useEffect(() => {
     if (trip) {
@@ -131,11 +184,10 @@ const Result = () => {
     }).filter(Boolean)
   ) : [];
 
-  const mapPins = trip ? trip.days.flatMap(d => d.items).filter(i => i.address) : [];
-  const mapQuery = mapPins.length > 0
-    ? mapPins.map(i => i.address || i.title).join("|")
-    : (trip?.destination || "Việt Nam") + " du lịch";
-  const mapSrc = `https://www.google.com/maps/embed/v1/search?key=AIzaSyBFw0Qbyq9zTFTd-tUY6dZWTgaQzuU17R8&q=${encodeURIComponent(mapQuery)}&zoom=12`;
+  const mappableItems = trip
+    ? trip.days.flatMap(d => d.items).filter(i => i.lat != null && i.lng != null)
+    : [];
+  const mapPins: GoongMapPin[] = mappableItems.map(i => ({ lat: i.lat!, lng: i.lng!, title: i.title }));
 
   const handleSave = async () => {
     if (!user) { toast.error("Vui lòng đăng nhập để lưu lịch trình"); navigate("/auth", { state: { from: "/result" } }); return; }
@@ -205,12 +257,25 @@ const Result = () => {
       const next = new Set(prev);
       if (next.has(key)) next.delete(key);
       else next.add(key);
+      if (dbTripId) {
+        localStorage.setItem(`chip-completed-${dbTripId}`, JSON.stringify(Array.from(next)));
+      }
       return next;
     });
   };
 
-  const handleDeleteItem = (dayIdx: number, itemIdx: number) => {
-    setTrip(prev => prev ? ({ ...prev, days: prev.days.map((day, di) => di === dayIdx ? { ...day, items: day.items.filter((_, ii) => ii !== itemIdx) } : day) }) : prev);
+  const handleDeleteItem = async (dayIdx: number, itemIdx: number) => {
+    const day = remoteTrip?.days?.[dayIdx];
+    const item = trip?.days[dayIdx]?.items[itemIdx];
+    if (dbTripId && !isSharedView && day && item) {
+       try {
+         await tripsApi.deleteActivity(dbTripId, day.id, Number(item.id));
+       } catch (err) {
+         toast.error("Không thể xóa hoạt động trên server");
+         return;
+       }
+    }
+    setTrip(prev => prev ? ({ ...prev, days: prev.days.map((d, di) => di === dayIdx ? { ...d, items: d.items.filter((_, ii) => ii !== itemIdx) } : d) }) : prev);
     toast.success("Đã xóa hoạt động");
   };
 
@@ -223,7 +288,20 @@ const Result = () => {
       if (targetIdx < 0 || targetIdx >= items.length) return prev;
       [items[itemIdx], items[targetIdx]] = [items[targetIdx], items[itemIdx]];
       newDays[dayIdx] = { ...newDays[dayIdx], items };
-      return { ...prev, days: newDays };
+      
+      const newTrip = { ...prev, days: newDays };
+
+      if (dbTripId && !isSharedView) {
+        const day = remoteTrip?.days?.[dayIdx];
+        if (day) {
+           const orderedIds = items.map(i => Number(i.id));
+           tripsApi.reorderActivities(dbTripId, day.id, orderedIds).catch(() => {
+              toast.error("Lỗi đồng bộ thứ tự trên server");
+           });
+        }
+      }
+
+      return newTrip;
     });
   };
 
@@ -274,7 +352,12 @@ const Result = () => {
             <div className="lg:col-span-2">
               <div className="sticky top-24 space-y-4">
                 <div className="rounded-2xl overflow-hidden border border-border bg-card shadow-card h-[50vh]">
-                  <iframe title="Bản đồ lịch trình" width="100%" height="100%" style={{ border: 0 }} loading="lazy" referrerPolicy="no-referrer-when-downgrade" src={mapSrc} />
+                  <GoongMap
+                    pins={mapPins}
+                    routes={routePolylines}
+                    className="w-full h-full"
+                    onPinClick={(idx) => handleItemClick(mappableItems[idx])}
+                  />
                 </div>
 
                 <div className="rounded-2xl border border-border bg-card shadow-card p-5 space-y-3">
@@ -406,10 +489,11 @@ const Result = () => {
                           const BookingIcon = bookingIcons[item.bookingType || "attraction"] || Ticket;
                           const bookingLabel = bookingLabels[item.bookingType || "attraction"] || "Xem thêm";
                           const isCompleted = completedItems.has(`${activeDay}-${idx}`);
+                          const travel = travelTimes[`${activeDay}-${idx}`];
 
                           return (
+                            <div key={idx}>
                             <div
-                              key={idx}
                               onClick={() => handleItemClick(item)}
                               className={`relative flex gap-4 bg-card rounded-xl p-4 border border-border shadow-card hover:shadow-warm transition-all ml-4 cursor-pointer hover:-translate-y-0.5 group/item ${isCompleted ? "opacity-60" : ""}`}
                             >
@@ -459,6 +543,16 @@ const Result = () => {
                               <div className="text-right flex-shrink-0">
                                 <span className="text-sm font-bold text-foreground">{item.cost}</span>
                               </div>
+                            </div>
+                            {travel && idx < trip.days[activeDay].items.length - 1 && (
+                              <div className="flex items-center gap-2 ml-8 my-1">
+                                <div className="flex-1 border-t border-dashed border-border/50" />
+                                <span className="text-xs text-muted-foreground whitespace-nowrap">
+                                  🚗 ~{formatDuration(travel.duration)} · {formatDistance(travel.distance)}
+                                </span>
+                                <div className="flex-1 border-t border-dashed border-border/50" />
+                              </div>
+                            )}
                             </div>
                           );
                         })}

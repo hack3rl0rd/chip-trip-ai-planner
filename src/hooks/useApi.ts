@@ -1,13 +1,15 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { tripsApi, userApi, authApi } from "@/integrations/api";
+import { tripsApi, userApi, authApi, placesApi, membersApi } from "@/integrations/api";
 import type { GenerateTripPayload } from "@/integrations/api/modules/trips";
-import type { UpdateProfilePayload } from "@/integrations/api/modules/user";
+import type { UpdateProfilePayload, ChangePasswordPayload } from "@/integrations/api/modules/user";
+import type { AddMemberPayload, UpdateMemberPayload } from "@/integrations/api/modules/members";
 
 export const queryKeys = {
   myTrips: ["myTrips"] as const,
   tripDetail: (id: number) => ["tripDetail", id] as const,
   sharedTrip: (token: string) => ["sharedTrip", token] as const,
   myProfile: ["myProfile"] as const,
+  tripMembers: (tripId: number) => ["tripMembers", tripId] as const,
 };
 
 export function useMyTrips() {
@@ -21,6 +23,14 @@ export function useTripDetail(id: number | null) {
   return useQuery({
     queryKey: queryKeys.tripDetail(id ?? -1),
     queryFn: () => tripsApi.getTripDetail(id!),
+    enabled: id != null,
+  });
+}
+
+export function usePlaceDetail(id: number | null | undefined) {
+  return useQuery({
+    queryKey: ["placeDetail", id],
+    queryFn: () => placesApi.getPlaceDetail(id!),
     enabled: id != null,
   });
 }
@@ -86,8 +96,53 @@ export function useUpdateProfile() {
   });
 }
 
+export function useChangePassword() {
+  return useMutation({
+    mutationFn: (payload: ChangePasswordPayload) => userApi.changePassword(payload),
+  });
+}
+
 export function useLogout() {
   return useMutation({
     mutationFn: authApi.logout,
+  });
+}
+
+export function useTripMembers(tripId: number | null) {
+  return useQuery({
+    queryKey: queryKeys.tripMembers(tripId ?? -1),
+    queryFn: () => membersApi.getMembers(tripId!),
+    enabled: tripId != null,
+  });
+}
+
+export function useAddMember(tripId: number) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: AddMemberPayload) => membersApi.addMember(tripId, payload),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.tripMembers(tripId) });
+    },
+  });
+}
+
+export function useUpdateMember(tripId: number) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ memberId, payload }: { memberId: number; payload: UpdateMemberPayload }) =>
+      membersApi.updateMember(tripId, memberId, payload),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.tripMembers(tripId) });
+    },
+  });
+}
+
+export function useRemoveMember(tripId: number) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (memberId: number) => membersApi.removeMember(tripId, memberId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.tripMembers(tripId) });
+    },
   });
 }
