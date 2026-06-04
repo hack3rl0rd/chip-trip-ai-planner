@@ -82,7 +82,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return () => window.removeEventListener("chiptrip-auth-change", onStorage);
   }, []);
 
-  const isAdmin = user?.role === "ADMIN";
+  const isAdmin = user?.role === "ROLE_ADMIN";
 
   return (
     <AuthContext.Provider value={{ user, session, loading, profile, isAdmin, signOut, updateProfile }}>

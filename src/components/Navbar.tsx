@@ -96,19 +96,18 @@ const Navbar = () => {
               </Button>
             </Link>
           )}
-          {isAdmin ? (
+          {isAdmin && (
             <Link to="/admin/users">
               <Button variant="ghost" size="sm" className="hidden sm:inline-flex gap-1.5">
                 <Settings className="w-4 h-4" /> Quản trị
               </Button>
             </Link>
-          ) : (
-            <Link to="/saved">
-              <Button variant="ghost" size="sm" className={`hidden sm:inline-flex ${location.pathname === "/saved" ? "bg-chip-yellow-light" : ""}`}>
-                Chuyến đi của tôi
-              </Button>
-            </Link>
           )}
+          <Link to="/saved">
+            <Button variant="ghost" size="sm" className={`hidden sm:inline-flex ${location.pathname === "/saved" ? "bg-chip-yellow-light" : ""}`}>
+              Chuyến đi của tôi
+            </Button>
+          </Link>
 
           {user ? (
             <div className="relative" ref={menuRef}>
@@ -154,6 +153,16 @@ const Navbar = () => {
 
                     {/* Menu items */}
                     <div className="py-1">
+                      {isAdmin && (
+                        <Link
+                          to="/admin/users"
+                          onClick={() => setMenuOpen(false)}
+                          className="flex items-center gap-3 px-4 py-2.5 text-sm text-chip-orange hover:bg-chip-yellow-light transition-colors font-medium"
+                        >
+                          <Settings className="w-4 h-4" />
+                          Trang quản trị
+                        </Link>
+                      )}
                       <Link
                         to="/profile"
                         onClick={() => setMenuOpen(false)}

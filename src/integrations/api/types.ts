@@ -25,6 +25,7 @@ export interface UserProfile {
   aiCredits: number;
   createdAt: string;
   role?: string;
+  preferences?: string | null;
 }
 
 export interface TripSummary {
@@ -38,6 +39,7 @@ export interface TripSummary {
   totalCostVnd?: number | null;
   peopleCount: number | null;
   styles: string | null;
+  imageUrl?: string | null;
 }
 
 export interface ActivityDetail {
@@ -52,6 +54,8 @@ export interface ActivityDetail {
   imageUrl: string | null;
   bookingUrl: string | null;
   displayOrder: number;
+  placeCacheId?: number | null;
+  address?: string | null;
 }
 
 export interface DayDetail {
@@ -70,6 +74,15 @@ export interface ChecklistDetail {
   displayOrder: number;
 }
 
+export interface TripMemberResponse {
+  id: number;
+  userId: number | null;
+  displayName: string;
+  avatarUrl: string | null;
+  role: "OWNER" | "MEMBER";
+  createdAt: string;
+}
+
 export interface TripDetail {
   id: number;
   title: string;
@@ -84,6 +97,7 @@ export interface TripDetail {
   updatedAt: string;
   totalCostVnd: number | null;
   shareToken: string | null;
+  members: TripMemberResponse[];
   days: DayDetail[];
   checklist: ChecklistDetail[];
 }

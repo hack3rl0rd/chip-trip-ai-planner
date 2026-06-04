@@ -11,10 +11,13 @@ export interface TripItem {
   cost: string;
   image: string;
   address?: string;
+  lat?: number;
+  lng?: number;
   rating?: number;
   tips?: string;
   bookingUrl?: string;
   bookingType?: "hotel" | "restaurant" | "attraction" | "transport" | "cafe";
+  placeCacheId?: number;
 }
 
 export interface TripDay {

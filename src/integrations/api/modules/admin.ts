@@ -2,7 +2,7 @@ import apiClient from "../client";
 import type { ApiResponse } from "../types";
 
 export interface AdminUserSummary {
-  userId: number;
+  id: number;
   email: string;
   fullName: string | null;
   avatarUrl: string | null;
@@ -12,6 +12,7 @@ export interface AdminUserSummary {
   role: string;
   lastLoginAt: string | null;
   createdAt: string;
+  updatedAt: string;
 }
 
 export interface AdminTripSummary {
@@ -35,7 +36,7 @@ export interface AdminAiUsageSummary {
 }
 
 export interface AdminUserDetail {
-  userId: number;
+  id: number;
   email: string;
   fullName: string | null;
   avatarUrl: string | null;
@@ -63,6 +64,20 @@ export interface AdminDailyCount {
   count: number;
 }
 
+export interface AdminAiUsageLog {
+  id: number;
+  provider: string;
+  tokensIn: number;
+  tokensOut: number;
+  costUsd: number;
+  createdAt: string;
+  userId: number;
+  userEmail: string;
+  userFullName: string | null;
+  tripId: number | null;
+  tripTitle: string | null;
+}
+
 export interface AdminAiCostByProviderMonth {
   provider: string;
   month: string;
@@ -73,7 +88,7 @@ export interface AdminAiCostByProviderMonth {
 }
 
 export interface GrantCreditsPayload {
-  credits: number;
+  amount: number;
 }
 
 export interface AssignRolePayload {
@@ -107,6 +122,11 @@ export const adminApi = {
   updateUser: async (userId: number, payload: UpdateUserPayload) => {
     const { data } = await apiClient.patch<ApiResponse<AdminUserSummary>>(`/admin/users/${userId}`, payload);
     return data.data;
+  },
+
+  toggleStatus: async (userId: number, enabled: boolean) => {
+    const { data } = await apiClient.patch<ApiResponse<void>>(`/admin/users/${userId}/status`, { enabled });
+    return data;
   },
 
   activateUser: async (userId: number) => {
@@ -179,5 +199,25 @@ export const adminApi = {
   deleteTrip: async (tripId: number) => {
     const { data } = await apiClient.delete(`/admin/trips/${tripId}`);
     return data;
+  },
+
+  getAiUsages: async (params?: {
+    userId?: number;
+    provider?: string;
+    from?: string;
+    to?: string;
+    page?: number;
+    size?: number;
+  }) => {
+    const { data } = await apiClient.get<ApiResponse<AdminAiUsageLog[]>>("/admin/ai-usages", { params });
+    return data.data;
+  },
+
+  getAiUsageSummary: async (from?: string, to?: string) => {
+    const { data } = await apiClient.get<ApiResponse<AdminAiCostByProviderMonth[]>>(
+      "/admin/ai-usages/summary",
+      { params: { from, to } }
+    );
+    return data.data;
   },
 };
