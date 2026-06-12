@@ -1,30 +1,35 @@
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { MapPin, Clock, Wallet, Star, Bookmark, Share2, Check, Download, ExternalLink, Hotel, UtensilsCrossed, Ticket, Coffee, Copy, Trash2, GripVertical, RefreshCw, Loader2, ChevronDown, ChevronUp, ArrowUp, ArrowDown } from "lucide-react";
-import { useState, useEffect, useRef, useCallback } from "react";
+import { MapPin, Clock, Wallet, Star, Bookmark, Share2, Check, Download, ExternalLink, Hotel, UtensilsCrossed, Ticket, Coffee, Copy, Trash2, RefreshCw, Loader2, ArrowUp, ArrowDown, Plane, Globe } from "lucide-react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { toast } from "sonner";
 import Navbar from "@/components/Navbar";
 import GoongMap, { type GoongMapPin } from "@/components/GoongMap";
-import { generateTrip, generatePackingList, type TripPlan, type TripItem } from "@/features/planning/trip-data";
+import { generatePackingList, type TripPlan, type TripItem } from "@/features/planning/trip-data";
 import { getPlaceImage } from "@/features/planning/place-image";
 import PackingList from "@/features/result/PackingList";
 import ExportDialog from "@/features/result/ExportDialog";
 import SuggestAlternativeModal from "@/features/result/SuggestAlternativeModal";
 import WeatherWidget from "@/features/result/WeatherWidget";
+import FlightCard from "@/features/result/FlightCard";
 import GroupPanel from "@/features/result/GroupPanel";
 import SplitBill from "@/features/result/SplitBill";
 import { useAuth } from "@/features/auth/useAuth";
 import { tripsApi } from "@/integrations/api";
 import { useTripDetail, useSharedTrip, useCloneTrip, useEnableShare } from "@/hooks/useApi";
+import { usePublishTrip } from "@/features/explore/hooks/usePublicFeed";
 import { mapTripDetailToPlan } from "@/lib/trip-mapper";
 import { getDirection, getConsecutiveTravelTimes, formatDuration, formatDistance } from "@/lib/goong";
+import { trackEvent } from "@/lib/analytics";
 import ChipMascot from "@/features/result/ChipMascot";
 
 const bookingIcons: Record<string, React.ElementType> = {
   hotel: Hotel, restaurant: UtensilsCrossed, attraction: Ticket, cafe: Coffee, transport: MapPin,
 };
+const formatVndShort = (vnd: number): string =>
+  vnd >= 1_000_000 ? `${(vnd / 1_000_000).toFixed(1)}M` : `${Math.round(vnd / 1000)}K`;
 const bookingLabels: Record<string, string> = {
   hotel: "Đặt phòng", restaurant: "Xem quán", attraction: "Mua vé", cafe: "Xem quán", transport: "Đặt xe",
 };
@@ -37,8 +42,6 @@ const Result = () => {
   const [swapModal, setSwapModal] = useState<{ open: boolean; item: TripItem | null; dayIdx: number; itemIdx: number }>({ open: false, item: null, dayIdx: 0, itemIdx: 0 });
   const [dbTripId, setDbTripId] = useState<number | null>(null);
   const [trip, setTrip] = useState<TripPlan | null>(null);
-  const [expandedDays, setExpandedDays] = useState<Set<number>>(new Set());
-  const [allExpanded, setAllExpanded] = useState(false);
   const [completedItems, setCompletedItems] = useState<Set<string>>(new Set());
   const [activeDay, setActiveDay] = useState(0);
   const dayTabsRef = useRef<HTMLDivElement>(null);
@@ -53,12 +56,50 @@ const Result = () => {
   const sharedToken = searchParams.get("shared");
   const urlTripId = searchParams.get("id");
 
-  const { data: remoteTrip, isLoading: loadingRemote } = useTripDetail(
+  const { data: remoteTrip, isLoading: loadingRemote, error: remoteError } = useTripDetail(
     !sharedToken && !tripFromState ? (urlTripId ? Number(urlTripId) : tripIdFromState) : null
   );
-  const { data: sharedTrip, isLoading: loadingShared } = useSharedTrip(sharedToken);
+  const { data: sharedTrip, isLoading: loadingShared, error: sharedError } = useSharedTrip(sharedToken);
   const cloneMutation = useCloneTrip();
   const enableShareMutation = useEnableShare();
+  const publishMutation = usePublishTrip();
+  const [isPublic, setIsPublic] = useState(false);
+
+  // Sync trạng thái công khai từ trip detail
+  useEffect(() => {
+    if (remoteTrip) setIsPublic(!!remoteTrip.isPublic);
+  }, [remoteTrip]);
+
+  const tripStatus = remoteTrip?.status ?? sharedTrip?.status ?? null;
+
+  // Chuyến ONGOING: auto-focus đúng ngày hôm nay thay vì luôn mở Ngày 1
+  useEffect(() => {
+    const detail = remoteTrip ?? sharedTrip;
+    if (!detail || detail.status !== "ONGOING" || !detail.days?.length) return;
+    const now = new Date();
+    const todayIso = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+    const idx = detail.days.findIndex((d) => d.date === todayIso);
+    if (idx >= 0) setActiveDay(idx);
+  }, [remoteTrip, sharedTrip]);
+
+  const handlePublishToggle = async () => {
+    if (!dbTripId) {
+      toast.error("Vui lòng lưu lịch trình trước khi đăng công khai");
+      return;
+    }
+    const next = !isPublic;
+    try {
+      await publishMutation.mutateAsync({ tripId: dbTripId, isPublic: next });
+      setIsPublic(next);
+      trackEvent("publish", { tripId: dbTripId, isPublic: next });
+      toast.success(next ? "Đã đăng công khai! 🌏" : "Đã hủy công khai", {
+        description: next ? "Mọi người có thể xem lịch trình này ở trang Khám phá" : undefined,
+        action: next ? { label: "Xem Khám phá", onClick: () => navigate("/explore") } : undefined,
+      });
+    } catch {
+      toast.error(next ? "Đăng công khai thất bại" : "Hủy công khai thất bại");
+    }
+  };
 
   // Set trip from navigation state or API
   useEffect(() => {
@@ -87,9 +128,19 @@ const Result = () => {
     }
   }, [tripFromState, sharedTrip, remoteTrip, tripIdFromState]);
 
-  // Fetch Direction polylines for all map pins (runs once when trip loads)
+  // Hiện tất cả địa điểm của cả hành trình trên map
+  const mappableItems = useMemo(
+    () => (trip ? trip.days.flatMap(d => d.items).filter(i => i.lat != null && i.lng != null) : []),
+    [trip]
+  );
+  const mapPins: GoongMapPin[] = useMemo(
+    () => mappableItems.map(i => ({ lat: i.lat!, lng: i.lng!, title: i.title })),
+    [mappableItems]
+  );
+
+  // Fetch Direction polylines cho toàn bộ pins của hành trình
   useEffect(() => {
-    if (mapPins.length < 2) return;
+    if (mapPins.length < 2) { setRoutePolylines([]); return; }
     let cancelled = false;
     (async () => {
       const results = await Promise.all(
@@ -100,9 +151,7 @@ const Result = () => {
       if (!cancelled) setRoutePolylines(results.map(r => r?.polyline ?? []));
     })();
     return () => { cancelled = true; };
-  // mapPins are stable once trip is set
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [trip]);
+  }, [mapPins]);
 
   // Fetch Distance Matrix for the active day's consecutive geocoded activities
   useEffect(() => {
@@ -140,41 +189,11 @@ const Result = () => {
       try {
         const stored = localStorage.getItem(`chip-completed-${dbTripId}`);
         if (stored) setCompletedItems(new Set(JSON.parse(stored)));
-      } catch {}
+      } catch {
+        // Ignore corrupt local completion cache.
+      }
     }
   }, [dbTripId]);
-
-  useEffect(() => {
-    if (trip) {
-      const initial = new Set<number>();
-      const limit = Math.min(3, trip.days.length);
-      for (let i = 0; i < limit; i++) initial.add(i);
-      setExpandedDays(initial);
-      setAllExpanded(trip.days.length <= 3);
-    }
-  }, [trip]);
-
-  const toggleDay = (idx: number) => {
-    setExpandedDays(prev => {
-      const next = new Set(prev);
-      if (next.has(idx)) next.delete(idx);
-      else next.add(idx);
-      return next;
-    });
-  };
-
-  const toggleAllDays = () => {
-    if (allExpanded) {
-      const initial = new Set<number>();
-      for (let i = 0; i < Math.min(3, (trip?.days.length || 0)); i++) initial.add(i);
-      setExpandedDays(initial);
-    } else {
-      const all = new Set<number>();
-      trip?.days.forEach((_, i) => all.add(i));
-      setExpandedDays(all);
-    }
-    setAllExpanded(!allExpanded);
-  };
 
   const packingItems = trip ? generatePackingList(
     trip.destination, trip.days.length,
@@ -184,16 +203,12 @@ const Result = () => {
     }).filter(Boolean)
   ) : [];
 
-  const mappableItems = trip
-    ? trip.days.flatMap(d => d.items).filter(i => i.lat != null && i.lng != null)
-    : [];
-  const mapPins: GoongMapPin[] = mappableItems.map(i => ({ lat: i.lat!, lng: i.lng!, title: i.title }));
-
   const handleSave = async () => {
     if (!user) { toast.error("Vui lòng đăng nhập để lưu lịch trình"); navigate("/auth", { state: { from: "/result" } }); return; }
     // Trip is already saved via backend during generation — just mark as saved
     setSaved(true);
     setDbTripId(tripFromState?.id ? Number(tripFromState.id) : dbTripId);
+    trackEvent("trip_saved", { tripId: tripFromState?.id ? Number(tripFromState.id) : dbTripId });
     toast.success("Đã lưu kế hoạch!", {
       description: "Xem lại trong \"Chuyến đi của tôi\"",
       action: { label: "Xem ngay", onClick: () => navigate("/saved") },
@@ -232,9 +247,15 @@ const Result = () => {
     }
   };
 
-  const handleItemClick = (item: TripItem) => { navigate("/location", { state: { item } }); };
+  const handleItemClick = (item: TripItem) => { navigate("/location", { state: { item, destination: trip?.destination } }); };
   const handleBooking = (e: React.MouseEvent, item: TripItem) => {
     e.stopPropagation();
+    trackEvent("booking_click", {
+      tripId: dbTripId,
+      itemTitle: item.title,
+      bookingType: item.bookingType,
+      hasBookingUrl: Boolean(item.bookingUrl),
+    });
     if (item.bookingUrl) window.open(item.bookingUrl, "_blank");
     else window.open(`https://www.google.com/search?q=${encodeURIComponent(item.title + " " + (item.address || trip!.destination))}`, "_blank");
   };
@@ -242,7 +263,7 @@ const Result = () => {
   const handleClone = async () => {
     if (!dbTripId) { toast.error("Vui lòng lưu lịch trình trước"); return; }
     try {
-      const cloned = await cloneMutation.mutateAsync(dbTripId);
+      await cloneMutation.mutateAsync(dbTripId);
       toast.success("Đã clone lịch trình!", {
         description: "Bản sao đã được lưu vào \"Chuyến đi của tôi\"",
         action: { label: "Xem ngay", onClick: () => navigate("/saved") },
@@ -316,6 +337,31 @@ const Result = () => {
     toast.success("Đã đổi hoạt động!");
   };
 
+  const loadError = remoteError || sharedError;
+  if (loadError && !trip) {
+    const status = (loadError as any)?.response?.status;
+    const message =
+      status === 403 ? "Bạn không có quyền xem lịch trình này"
+      : status === 404 ? "Không tìm thấy lịch trình"
+      : (loadError as any)?.response?.data?.message || "Đã có lỗi xảy ra khi tải lịch trình";
+    return (
+      <div className="min-h-screen bg-background">
+        <Navbar />
+        <div className="flex flex-col items-center justify-center pt-40 gap-4 px-6 text-center">
+          <div className="text-5xl">{status === 403 ? "🔒" : status === 404 ? "🔍" : "⚠️"}</div>
+          <h2 className="text-xl font-bold text-foreground">{message}</h2>
+          <p className="text-muted-foreground max-w-sm">
+            Lịch trình này có thể thuộc về người khác hoặc đã bị xóa.
+          </p>
+          <div className="flex gap-3">
+            <Button variant="hero" onClick={() => navigate("/saved")}>Chuyến đi của tôi</Button>
+            <Button variant="soft" onClick={() => navigate("/")}>Về trang chủ</Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (loadingRemote || loadingShared || !trip) {
     return (
       <div className="min-h-screen bg-background">
@@ -332,6 +378,17 @@ const Result = () => {
     <div className="min-h-screen bg-background pb-24">
       <Navbar />
       <div className="pt-20 pb-12">
+        {!isSharedView && tripStatus === "ONGOING" && (
+          <div className="container mx-auto px-6 mb-4">
+            <div className="rounded-2xl bg-green-500/10 border border-green-500/30 px-5 py-3 flex items-center gap-3">
+              <span className="w-2.5 h-2.5 rounded-full bg-green-500 animate-pulse flex-shrink-0" />
+              <div className="flex-1">
+                <p className="font-semibold text-foreground text-sm">Chuyến đi đang diễn ra 🎒</p>
+                <p className="text-xs text-muted-foreground">Đang mở lịch trình hôm nay — tick "Đã đi ✓" khi hoàn thành mỗi hoạt động</p>
+              </div>
+            </div>
+          </div>
+        )}
         {isSharedView && (
           <div className="container mx-auto px-6 mb-4">
             <div className="rounded-2xl bg-chip-yellow-light border border-chip-yellow/30 px-5 py-3 flex items-center gap-3">
@@ -364,42 +421,25 @@ const Result = () => {
                   <h3 className="font-display font-bold text-foreground flex items-center gap-2">
                     <Wallet className="w-4 h-4 text-chip-orange" /> Dự toán chi phí
                   </h3>
+                  {/* Single source of truth: item.costVnd (số thô từ backend) — tự cập nhật khi xóa/đổi activity */}
                   <div className="space-y-2">
                     {trip.days.map(day => {
-                      const dayCost = day.items.reduce((sum, item) => {
-                        const costStr = item.cost.toLowerCase().replace(/[^0-9.km]/g, "");
-                        if (!costStr) return sum;
-                        const numMatch = costStr.match(/([0-9.]+)/);
-                        if (!numMatch) return sum;
-                        const num = parseFloat(numMatch[1]);
-                        if (isNaN(num)) return sum;
-                        if (costStr.includes("m")) return sum + num * 1000;
-                        if (costStr.includes("k")) return sum + num;
-                        return sum + num;
-                      }, 0);
+                      const dayCost = day.items.reduce((sum, item) => sum + (item.costVnd ?? 0), 0);
                       return (
                         <div key={day.day} className="flex items-center justify-between text-sm">
                           <span className="text-muted-foreground">{day.day}</span>
-                          <span className="font-semibold text-foreground">{dayCost > 0 ? `${dayCost >= 1000 ? `${(dayCost / 1000).toFixed(1)}M` : `${dayCost}K`}` : "Miễn phí"}</span>
+                          <span className="font-semibold text-foreground">{dayCost > 0 ? formatVndShort(dayCost) : "Miễn phí"}</span>
                         </div>
                       );
                     })}
                   </div>
                   {(() => {
-                    const total = trip.days.reduce((s, day) => s + day.items.reduce((ds, item) => {
-                      const costStr = item.cost.toLowerCase().replace(/[^0-9.km]/g, "");
-                      const numMatch = costStr.match(/([0-9.]+)/);
-                      if (!numMatch) return ds;
-                      const num = parseFloat(numMatch[1]);
-                      if (isNaN(num)) return ds;
-                      if (costStr.includes("m")) return ds + num * 1000;
-                      if (costStr.includes("k")) return ds + num;
-                      return ds + num;
-                    }, 0), 0);
+                    const total = trip.days.reduce(
+                      (s, day) => s + day.items.reduce((ds, item) => ds + (item.costVnd ?? 0), 0), 0);
                     return (
                       <div className="border-t border-border pt-3 flex items-center justify-between">
                         <span className="font-semibold text-foreground">Tổng ước tính</span>
-                        <span className="text-lg font-bold text-gradient">{total >= 1000 ? `${(total / 1000).toFixed(1)}M` : `${total}K`} VNĐ</span>
+                        <span className="text-lg font-bold text-gradient">{formatVndShort(total)} VNĐ</span>
                       </div>
                     );
                   })()}
@@ -418,6 +458,8 @@ const Result = () => {
                     <Button variant="ghost" size="sm" className="text-xs">Tìm hiểu</Button>
                   </div>
                 </div>
+
+                {!isSharedView && dbTripId && <FlightCard tripId={dbTripId} />}
 
                 <WeatherWidget destination={trip.destination} dates={trip.days.map(d => d.date).filter(Boolean)} />
               </div>
@@ -486,8 +528,19 @@ const Result = () => {
                     <motion.div key={activeDay} initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.2 }} className="space-y-3">
                       <div className="space-y-3 pl-4 border-l-2 border-chip-orange/20 ml-4">
                         {trip.days[activeDay].items.map((item, idx) => {
-                          const BookingIcon = bookingIcons[item.bookingType || "attraction"] || Ticket;
-                          const bookingLabel = bookingLabels[item.bookingType || "attraction"] || "Xem thêm";
+                          // Chuyến bay: TRANSPORT có tên/desc chỉ chuyến bay → trỏ tới card vé máy bay thay vì "Đặt xe trên Grab"
+                          const isFlight = item.bookingType === "transport"
+                            && /chuyến bay|máy bay|vé bay|bay từ|bay đi|sân bay/i.test(`${item.title} ${item.desc}`);
+                          const BookingIcon = isFlight ? Plane : (bookingIcons[item.bookingType || "attraction"] || Ticket);
+                          let bookingLabel = isFlight ? "Vé máy bay" : (bookingLabels[item.bookingType || "attraction"] || "Xem thêm");
+                          if (!isFlight && item.bookingUrl) {
+                            if (item.bookingUrl.toLowerCase().includes("trip.com")) bookingLabel = "Trip.com";
+                            else if (item.bookingUrl.toLowerCase().includes("agoda.com")) bookingLabel = "Agoda";
+                            else if (item.bookingUrl.toLowerCase().includes("booking.com")) bookingLabel = "Booking.com";
+                            else if (item.bookingUrl.toLowerCase().includes("traveloka.com")) bookingLabel = "Traveloka";
+                            else if (item.bookingUrl.toLowerCase().includes("hopegoo.com")) bookingLabel = "HOPEGOO";
+                            else if (item.bookingUrl.toLowerCase().includes("edreams.net")) bookingLabel = "eDreams";
+                          }
                           const isCompleted = completedItems.has(`${activeDay}-${idx}`);
                           const travel = travelTimes[`${activeDay}-${idx}`];
 
@@ -521,8 +574,18 @@ const Result = () => {
                                 <h4 className={`font-semibold text-foreground truncate ${isCompleted ? "line-through" : ""}`}>{item.title}</h4>
                                 <p className="text-sm text-muted-foreground">{item.desc}</p>
                                 <div className="flex items-center gap-2 mt-2 flex-wrap">
-                                  <button onClick={(e) => handleBooking(e, item)} className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-chip-yellow-light hover:bg-chip-orange/10 border border-chip-yellow/30 text-xs font-semibold text-chip-orange transition-all hover:shadow-warm">
-                                    <BookingIcon className="w-3 h-3" /> {bookingLabel} <ExternalLink className="w-3 h-3" />
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      if (isFlight && !isSharedView) {
+                                        document.getElementById("flight-card")?.scrollIntoView({ behavior: "smooth", block: "center" });
+                                      } else {
+                                        handleBooking(e, item);
+                                      }
+                                    }}
+                                    className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-chip-yellow-light hover:bg-chip-orange/10 border border-chip-yellow/30 text-xs font-semibold text-chip-orange transition-all hover:shadow-warm"
+                                  >
+                                    <BookingIcon className="w-3 h-3" /> {bookingLabel} {!isFlight && <ExternalLink className="w-3 h-3" />}
                                   </button>
                                   <button onClick={(e) => { e.stopPropagation(); setSwapModal({ open: true, item, dayIdx: activeDay, itemIdx: idx }); }} className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-muted hover:bg-chip-orange/10 border border-border text-xs font-medium text-muted-foreground hover:text-chip-orange transition-all" title="Đổi">
                                     <RefreshCw className="w-3 h-3" /> Đổi
@@ -590,6 +653,16 @@ const Result = () => {
               )}
               <Button variant="soft" size="sm" onClick={handleShare} className="gap-1.5 flex-shrink-0">
                 <Share2 className="w-4 h-4" /> Chia sẻ
+              </Button>
+              <Button
+                variant={isPublic ? "hero" : "soft"}
+                size="sm"
+                onClick={handlePublishToggle}
+                disabled={publishMutation.isPending}
+                className="gap-1.5 flex-shrink-0"
+              >
+                <Globe className="w-4 h-4" />
+                {isPublic ? "Hủy công khai" : "Đăng công khai"}
               </Button>
               <ExportDialog trip={trip} dbTripId={dbTripId}>
                 <Button variant="soft" size="sm" className="gap-1.5 flex-shrink-0">

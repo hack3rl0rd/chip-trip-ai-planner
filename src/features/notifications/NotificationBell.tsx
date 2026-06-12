@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Bell, Check, CheckCheck, MapPin, Cloud, Users, Zap, MessageCircle } from "lucide-react";
+import { Bell, Check, CheckCheck, MapPin, Cloud, Users, Zap, MessageCircle, Heart, MessageSquare, Sparkles } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
@@ -25,6 +25,12 @@ function iconFor(type: NotificationType) {
     case "SUPPORT_REPLY":
     case "NEW_SUPPORT_MESSAGE":
       return <MessageCircle className="w-4 h-4 text-primary" />;
+    case "TRIP_LIKED":
+      return <Heart className="w-4 h-4 text-chip-orange" />;
+    case "TRIP_COMMENTED":
+      return <MessageSquare className="w-4 h-4 text-chip-orange" />;
+    case "POST_TRIP_REVIEW":
+      return <Sparkles className="w-4 h-4 text-chip-orange" />;
     default:
       return <Bell className="w-4 h-4 text-muted-foreground" />;
   }
@@ -45,7 +51,7 @@ export function NotificationBell() {
   const navigate = useNavigate();
 
   const { data: count = 0 } = useUnreadCount();
-  const { data: list = [], isLoading } = useNotificationList(0, 10);
+  const { data: list = [], isLoading, isError, refetch } = useNotificationList(0, 10);
   const markRead = useMarkRead();
   const markAllRead = useMarkAllRead();
 
@@ -66,10 +72,12 @@ export function NotificationBell() {
   }, []);
 
   const handleClickItem = (n: NotificationDto) => {
-    if (!n.isRead) markRead.mutate(n.id);
+    if (!n.isRead && n.id != null) markRead.mutate(n.id);
     setOpen(false);
-    if (n.refId && (n.type === "TRIP_MEMBER_ADDED" || n.type === "TRIP_REMINDER")) {
+    if (n.refId && (n.type === "TRIP_MEMBER_ADDED" || n.type === "TRIP_REMINDER" || n.type === "POST_TRIP_REVIEW")) {
       navigate(`/result?id=${n.refId}`);
+    } else if (n.refId && (n.type === "TRIP_LIKED" || n.type === "TRIP_COMMENTED")) {
+      navigate(`/trips/${n.refId}/public`);
     } else if (n.type === "NEW_SUPPORT_MESSAGE") {
       navigate("/admin/chat");
     }
@@ -118,7 +126,19 @@ export function NotificationBell() {
               {isLoading && (
                 <div className="px-4 py-6 text-sm text-muted-foreground text-center">Đang tải…</div>
               )}
-              {!isLoading && list.length === 0 && (
+              {!isLoading && isError && (
+                <div className="px-4 py-6 text-center space-y-2">
+                  <p className="text-sm text-destructive">Không thể tải thông báo</p>
+                  <button
+                    type="button"
+                    onClick={() => refetch()}
+                    className="text-xs text-primary hover:underline"
+                  >
+                    Thử lại
+                  </button>
+                </div>
+              )}
+              {!isLoading && !isError && list.length === 0 && (
                 <div className="px-4 py-6 text-sm text-muted-foreground text-center">
                   Chưa có thông báo nào
                 </div>

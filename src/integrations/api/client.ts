@@ -4,7 +4,7 @@ const BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:8080/api/v1";
 
 export const apiClient = axios.create({
   baseURL: BASE_URL,
-  timeout: 30_000,
+  timeout: 120_000,
   headers: { "Content-Type": "application/json" },
 });
 
@@ -30,14 +30,24 @@ export const authStorage = {
 };
 
 let isRefreshing = false;
-let refreshSubscribers: Array<(token: string) => void> = [];
+let refreshSubscribers: Array<{
+  resolve: (token: string) => void;
+  reject: (error: unknown) => void;
+}> = [];
 
-function subscribeTokenRefresh(cb: (token: string) => void) {
-  refreshSubscribers.push(cb);
+function subscribeTokenRefresh() {
+  return new Promise<string>((resolve, reject) => {
+    refreshSubscribers.push({ resolve, reject });
+  });
 }
 
 function onTokenRefreshed(token: string) {
-  refreshSubscribers.forEach((cb) => cb(token));
+  refreshSubscribers.forEach((subscriber) => subscriber.resolve(token));
+  refreshSubscribers = [];
+}
+
+function onTokenRefreshFailed(error: unknown) {
+  refreshSubscribers.forEach((subscriber) => subscriber.reject(error));
   refreshSubscribers = [];
 }
 
@@ -54,13 +64,11 @@ apiClient.interceptors.response.use(
   async (error) => {
     const originalRequest = error.config;
 
-    if (error.response?.status === 401 && !originalRequest._retry) {
+    if (error.response?.status === 401 && !originalRequest._retry && authStorage.getRefreshToken()) {
       if (isRefreshing) {
-        return new Promise((resolve) => {
-          subscribeTokenRefresh((token: string) => {
-            originalRequest.headers.Authorization = `Bearer ${token}`;
-            resolve(apiClient(originalRequest));
-          });
+        return subscribeTokenRefresh().then((token) => {
+          originalRequest.headers.Authorization = `Bearer ${token}`;
+          return apiClient(originalRequest);
         });
       }
 
@@ -84,11 +92,12 @@ apiClient.interceptors.response.use(
 
         originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;
         return apiClient(originalRequest);
-      } catch {
+      } catch (refreshError) {
         isRefreshing = false;
+        onTokenRefreshFailed(refreshError);
         authStorage.clear();
         window.location.href = "/auth";
-        return Promise.reject(error);
+        return Promise.reject(refreshError);
       }
     }
 

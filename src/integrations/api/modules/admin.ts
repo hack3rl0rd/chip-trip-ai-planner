@@ -55,12 +55,23 @@ export interface AdminUserDetail {
 export interface AdminDashboard {
   totalUsers: number;
   totalTrips: number;
+  publishedTrips?: number;
+  totalLikes?: number;
+  totalComments?: number;
+  totalReviews?: number;
+  totalOrders?: number;
+  revenueVndThisMonth?: number;
   aiCallsThisMonth: number;
   aiCostUsdThisMonth: number;
 }
 
 export interface AdminDailyCount {
   date: string;
+  count: number;
+}
+
+export interface AdminEventCount {
+  event: string;
   count: number;
 }
 
@@ -99,8 +110,6 @@ export interface UpdateUserPayload {
   fullName?: string;
   aiCredits?: number;
 }
-
-const BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:8080/api/v1";
 
 export const adminApi = {
   getUsers: async (params?: {
@@ -176,6 +185,28 @@ export const adminApi = {
   getAiCostStats: async (from: string, to: string) => {
     const { data } = await apiClient.get<ApiResponse<AdminAiCostByProviderMonth[]>>("/admin/stats/ai-cost", {
       params: { from, to },
+    });
+    return data.data;
+  },
+
+  // PostHog proxy — key giữ ở backend, không lộ ra frontend
+  getAnalyticsPageviews: async (days = 14) => {
+    const { data } = await apiClient.get<ApiResponse<AdminDailyCount[]>>("/admin/stats/analytics/pageviews", {
+      params: { days },
+    });
+    return data.data;
+  },
+
+  getAnalyticsEvents: async (days = 30) => {
+    const { data } = await apiClient.get<ApiResponse<AdminEventCount[]>>("/admin/stats/analytics/events", {
+      params: { days },
+    });
+    return data.data;
+  },
+
+  getAnalyticsFunnel: async (days = 30) => {
+    const { data } = await apiClient.get<ApiResponse<AdminEventCount[]>>("/admin/stats/analytics/funnel", {
+      params: { days },
     });
     return data.data;
   },

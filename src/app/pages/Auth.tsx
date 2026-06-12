@@ -1,13 +1,14 @@
 import { useState, useEffect, useRef } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { MapPin, Mail, Lock, User, Eye, EyeOff, ArrowLeft, Sparkles, KeyRound, CheckCircle2 } from "lucide-react";
+import { MapPin, Mail, Lock, User, Eye, EyeOff, ArrowLeft, Sparkles, KeyRound } from "lucide-react";
 import { toast } from "sonner";
 import { authApi, authStorage } from "@/integrations/api";
 import { useAuth } from "@/features/auth/useAuth";
+import { trackEvent } from "@/lib/analytics";
 
 type AuthStep =
   | "login"
@@ -17,9 +18,59 @@ type AuthStep =
   | "forgot-password-otp"
   | "forgot-password-set-password";
 
+type GoogleCredentialResponse = {
+  credential?: string;
+};
+
+type GooglePromptNotification = {
+  isNotDisplayed: () => boolean;
+  isSkippedMoment: () => boolean;
+  isDismissedMoment: () => boolean;
+};
+
+type GoogleIdentityServices = {
+  accounts: {
+    id: {
+      initialize: (options: {
+        client_id: string;
+        callback: (response: GoogleCredentialResponse) => void | Promise<void>;
+      }) => void;
+      prompt: (listener?: (notification: GooglePromptNotification) => void) => void;
+    };
+  };
+};
+
+const loadGoogleIdentityScript = () =>
+  new Promise<void>((resolve, reject) => {
+    const googleIdentity = (window as unknown as { google?: GoogleIdentityServices }).google;
+    if (googleIdentity?.accounts?.id) {
+      resolve();
+      return;
+    }
+
+    const existingScript = document.querySelector<HTMLScriptElement>('script[src="https://accounts.google.com/gsi/client"]');
+    if (existingScript) {
+      existingScript.addEventListener("load", () => resolve(), { once: true });
+      existingScript.addEventListener("error", () => reject(new Error("Google Identity script failed to load")), { once: true });
+      return;
+    }
+
+    const script = document.createElement("script");
+    script.src = "https://accounts.google.com/gsi/client";
+    script.async = true;
+    script.defer = true;
+    script.onload = () => resolve();
+    script.onerror = () => reject(new Error("Google Identity script failed to load"));
+    document.head.appendChild(script);
+  });
+
 const Auth = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { user } = useAuth();
+  // Trang gọi navigate("/auth", { state: { from } }) → quay lại đúng nơi sau khi login
+  // (vd link mời /trips/join/:token, trip public). Không có from thì về trang chủ.
+  const redirectTo = (location.state as { from?: string } | null)?.from || "/";
 
   const [step, setStep] = useState<AuthStep>("login");
   const [showPassword, setShowPassword] = useState(false);
@@ -39,9 +90,9 @@ const Auth = () => {
 
   useEffect(() => {
     if (user) {
-      navigate("/", { replace: true });
+      navigate(redirectTo, { replace: true });
     }
-  }, [user, navigate]);
+  }, [user, navigate, redirectTo]);
 
   useEffect(() => {
     return () => {
@@ -64,7 +115,6 @@ const Auth = () => {
   };
 
   const getOtpInputProps = (index: number) => ({
-    key: index,
     type: "text" as const,
     inputMode: "numeric" as const,
     maxLength: 1,
@@ -108,14 +158,19 @@ const Auth = () => {
       authStorage.setUser(authResponse);
       window.dispatchEvent(new Event("chiptrip-auth-change"));
       toast.success("Đăng nhập thành công!");
-      navigate("/", { replace: true });
+      navigate(redirectTo, { replace: true });
     } catch (error: any) {
-      if (error.response?.data?.code === "EMAIL_NOT_VERIFIED") {
+      const code = error.response?.data?.code;
+      const status = error.response?.status;
+      if (code === "EMAIL_NOT_VERIFIED") {
         toast.error("Email chưa được xác nhận.", {
           description: "Vui lòng nhập mã OTP đã gửi đến email của bạn.",
         });
         setForm(prev => ({ ...prev, password: "" }));
         setStep("verify-email-otp");
+      } else if (status === 401 || code === "INVALID_CREDENTIALS") {
+        toast.error("Sai mật khẩu hoặc tài khoản không tồn tại");
+        setForm(prev => ({ ...prev, password: "" }));
       } else {
         const msg = error.response?.data?.message || error.message || "Có lỗi xảy ra";
         toast.error(msg);
@@ -141,6 +196,7 @@ const Auth = () => {
     setLoading(true);
     try {
       await authApi.register({ email: form.email, password: form.password, fullName: form.name });
+      trackEvent("sign_up", { method: "email" });
       toast.success("Mã xác nhận đã được gửi đến email!", {
         description: "Vui lòng nhập mã 6 chữ số để hoàn tất đăng ký.",
       });
@@ -238,28 +294,51 @@ const Auth = () => {
   };
 
   const handleGoogleLogin = async () => {
+    const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+    if (!clientId) {
+      toast.error("Missing VITE_GOOGLE_CLIENT_ID");
+      return;
+    }
+
     setLoading(true);
     try {
-      const client = window.google.accounts.oauth2.initTokenClient({
-        client_id: import.meta.env.VITE_GOOGLE_CLIENT_ID,
-        scope: "email profile openid",
-        callback: async (response: any) => {
-          if (response.error) {
+      await loadGoogleIdentityScript();
+      const googleIdentity = (window as unknown as { google?: GoogleIdentityServices }).google;
+      if (!googleIdentity?.accounts?.id) {
+        throw new Error("Google Identity Services is not available");
+      }
+
+      googleIdentity.accounts.id.initialize({
+        client_id: clientId,
+        callback: async (response) => {
+          if (!response.credential) {
             toast.error("Đăng nhập Google thất bại");
             setLoading(false);
             return;
           }
-          const authResponse = await authApi.googleLogin(response.access_token);
+          try {
+          const authResponse = await authApi.googleLogin(response.credential);
           authStorage.setAccessToken(authResponse.accessToken);
           authStorage.setRefreshToken(authResponse.refreshToken);
           authStorage.setUser(authResponse);
           window.dispatchEvent(new Event("chiptrip-auth-change"));
+          trackEvent("login_google_succeeded", { method: "google" });
           toast.success("Đăng nhập thành công!");
-          navigate("/", { replace: true });
+          navigate(redirectTo, { replace: true });
+          } catch (error: any) {
+            const msg = error.response?.data?.message || error.message || "Google login failed";
+            toast.error(msg);
+            setLoading(false);
+          }
         },
       });
-      client.requestAccessToken();
-    } catch {
+      googleIdentity.accounts.id.prompt((notification) => {
+        if (notification.isNotDisplayed() || notification.isSkippedMoment() || notification.isDismissedMoment()) {
+          setLoading(false);
+        }
+      });
+    } catch (error) {
+      console.error("Google login failed:", error);
       toast.error("Đăng nhập Google thất bại");
       setLoading(false);
     }

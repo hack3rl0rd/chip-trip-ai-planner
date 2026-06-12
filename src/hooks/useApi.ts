@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { tripsApi, userApi, authApi, placesApi, membersApi } from "@/integrations/api";
+import { tripsApi, userApi, authApi, placesApi, membersApi, flightsApi } from "@/integrations/api";
 import type { GenerateTripPayload } from "@/integrations/api/modules/trips";
 import type { UpdateProfilePayload, ChangePasswordPayload } from "@/integrations/api/modules/user";
 import type { AddMemberPayload, UpdateMemberPayload } from "@/integrations/api/modules/members";
@@ -40,6 +40,16 @@ export function useSharedTrip(token: string | null) {
     queryKey: queryKeys.sharedTrip(token ?? ""),
     queryFn: () => tripsApi.getSharedTrip(token!),
     enabled: token != null,
+  });
+}
+
+export function useTripFlights(tripId: number | null, enabled: boolean) {
+  return useQuery({
+    queryKey: ["tripFlights", tripId],
+    queryFn: () => flightsApi.getTripFlights(tripId!),
+    enabled: enabled && tripId != null,
+    staleTime: 60 * 60 * 1000, // giá vé đổi chậm — cache 1h ở client (BE cache 6h)
+    retry: false,
   });
 }
 

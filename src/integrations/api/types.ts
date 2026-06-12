@@ -6,13 +6,25 @@ export interface ApiResponse<T> {
   timestamp: string;
 }
 
+/** PageMeta từ backend (common/response/PageMeta.java). */
+export interface PageMeta {
+  page: number;
+  size: number;
+  totalElements: number;
+  totalPages: number;
+  last: boolean;
+}
+
 export type NotificationType =
   | "TRIP_MEMBER_ADDED"
   | "TRIP_REMINDER"
   | "AI_CREDITS_LOW"
   | "WEATHER_ALERT"
   | "SUPPORT_REPLY"
-  | "NEW_SUPPORT_MESSAGE";
+  | "NEW_SUPPORT_MESSAGE"
+  | "TRIP_LIKED"
+  | "TRIP_COMMENTED"
+  | "POST_TRIP_REVIEW";
 
 // ====== Chat (support) ======
 export type ConversationStatus = "OPEN" | "CLOSED";
@@ -68,7 +80,8 @@ export interface AuthResponse {
 }
 
 export interface UserProfile {
-  userId: number;
+  id: number;
+  userId?: number;
   email: string;
   fullName: string | null;
   avatarUrl: string | null;
@@ -90,7 +103,13 @@ export interface TripSummary {
   peopleCount: number | null;
   styles: string | null;
   imageUrl?: string | null;
+  isPublic?: boolean | null;
+  likesCount?: number | null;
+  commentsCount?: number | null;
+  status?: TripLifecycleStatus | null;
 }
+
+export type TripLifecycleStatus = "UPCOMING" | "ONGOING" | "COMPLETED";
 
 export interface ActivityDetail {
   id: number;
@@ -147,12 +166,18 @@ export interface TripDetail {
   updatedAt: string;
   totalCostVnd: number | null;
   shareToken: string | null;
+  isPublic?: boolean | null;
+  publishedAt?: string | null;
+  likesCount?: number | null;
+  commentsCount?: number | null;
+  status?: TripLifecycleStatus | null;
+  user?: { id: number; email: string; fullName: string | null; avatarUrl: string | null } | null;
   members: TripMemberResponse[];
   days: DayDetail[];
   checklist: ChecklistDetail[];
 }
 
-export interface TripGenerateResponse extends TripDetail {}
+export type TripGenerateResponse = TripDetail;
 
 export interface ShareTokenResponse {
   shareToken: string;

@@ -7,6 +7,17 @@ function formatVnd(vnd: number | null | undefined): string {
   return `${vnd / 1000}K`;
 }
 
+// Backend ActivityType enum (UPPERCASE) → frontend bookingType key
+function mapBookingType(type: string | null | undefined): TripItem["bookingType"] {
+  switch (type) {
+    case "ACCOMMODATION": return "hotel";
+    case "FOOD": return "restaurant";
+    case "TRANSPORT": return "transport";
+    case "ATTRACTION": return "attraction";
+    default: return "attraction";
+  }
+}
+
 function parseLocalTime(time: string): string {
   if (!time) return "09:00";
   const parts = time.split(":");
@@ -32,6 +43,25 @@ function formatDateRange(start: string | null, end: string | null): string {
   return e;
 }
 
+export function parseTripStyles(value: unknown): string[] {
+  if (Array.isArray(value)) {
+    return value.filter((item): item is string => typeof item === "string" && item.trim().length > 0);
+  }
+
+  if (typeof value !== "string" || !value.trim()) return [];
+
+  try {
+    const parsed = JSON.parse(value);
+    if (Array.isArray(parsed)) {
+      return parsed.filter((item): item is string => typeof item === "string" && item.trim().length > 0);
+    }
+  } catch {
+    return value.split(",").map((item) => item.trim()).filter(Boolean);
+  }
+
+  return [];
+}
+
 export function mapTripDetailToPlan(detail: TripDetail | TripGenerateResponse): TripPlan {
   const days: TripDay[] = (detail.days || []).map((day) => {
     const items: TripItem[] = (day.activities || []).map((act) => ({
@@ -40,6 +70,7 @@ export function mapTripDetailToPlan(detail: TripDetail | TripGenerateResponse): 
       title: act.name,
       desc: act.description || "",
       cost: formatVnd(act.costVnd),
+      costVnd: act.costVnd ?? 0,
       image: act.imageUrl || "/placeholder.svg",
       address: act.address || (act.latitude && act.longitude ? `${act.latitude}, ${act.longitude}` : undefined),
       lat: act.latitude ?? undefined,
@@ -47,7 +78,7 @@ export function mapTripDetailToPlan(detail: TripDetail | TripGenerateResponse): 
       rating: undefined,
       tips: undefined,
       bookingUrl: act.bookingUrl || undefined,
-      bookingType: act.type as TripItem["bookingType"],
+      bookingType: mapBookingType(act.type),
       placeCacheId: act.placeCacheId ?? undefined,
     }));
 
@@ -68,11 +99,7 @@ export function mapTripDetailToPlan(detail: TripDetail | TripGenerateResponse): 
   }
   const numNights = Math.max(0, numDays - 1);
 
-  const styles: string[] = detail.styles
-    ? (typeof detail.styles === "string"
-        ? (detail.styles as string).split(",").map((s) => s.trim()).filter(Boolean)
-        : (detail.styles as string[]))
-    : [];
+  const styles = parseTripStyles(detail.styles);
 
   return {
     id: String(detail.id),
@@ -95,7 +122,7 @@ export function mapTripSummaryToCard(summary: TripSummary): { id: string; title:
     destination: summary.destination,
     dateRange: formatDateRange(summary.dateStart, summary.dateEnd),
     totalCost: formatVnd(summary.totalCostVnd),
-    tags: summary.styles || [],
+    tags: parseTripStyles(summary.styles),
     image: "/placeholder.svg",
   };
 }

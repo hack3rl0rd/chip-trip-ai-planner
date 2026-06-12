@@ -8,6 +8,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 import Navbar from "@/components/Navbar";
 import { addCredits } from "@/features/planning/trip-data";
+import { trackEvent } from "@/lib/analytics";
 
 const planDetails: Record<string, { name: string; price: string; period: string; credits: number; features: string[] }> = {
   premium: {
@@ -63,6 +64,14 @@ const Checkout = () => {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setProcessing(true);
+    const priceVnd = Number(plan.price.replace(/\D/g, ""));
+    trackEvent("purchase_started", {
+      planKey,
+      planName: plan.name,
+      priceVnd,
+      method,
+      credits: plan.credits,
+    });
     const delay = method === "bank" ? 1500 : 2000;
     setTimeout(() => {
       setProcessing(false);
@@ -73,6 +82,13 @@ const Checkout = () => {
       } else {
         toast.success(`Đã nâng cấp ${plan.name}! +${plan.credits} lượt AI 🎉`);
       }
+      trackEvent("purchase_succeeded", {
+        planKey,
+        planName: plan.name,
+        priceVnd,
+        method,
+        credits: plan.credits,
+      });
       navigate("/planning");
     }, delay);
   };

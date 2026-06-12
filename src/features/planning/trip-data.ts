@@ -9,6 +9,8 @@ export interface TripItem {
   title: string;
   desc: string;
   cost: string;
+  /** Số thô VNĐ từ backend (costVnd) — single source of truth, `cost` chỉ là chuỗi hiển thị. */
+  costVnd?: number;
   image: string;
   address?: string;
   lat?: number;

@@ -6,7 +6,7 @@ export const notificationsApi = {
     const res = await apiClient.get<ApiResponse<NotificationDto[]>>("/notifications", {
       params: { page, size },
     });
-    return res.data.data;
+    return res.data.data ?? [];
   },
 
   unreadCount: async (): Promise<number> => {

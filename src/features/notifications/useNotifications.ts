@@ -16,7 +16,7 @@ export function useNotificationList(page = 0, size = 20) {
   return useQuery<NotificationDto[]>({
     queryKey: [...notificationKeys.list, page, size],
     queryFn: async () => {
-      const fromApi = await notificationsApi.list(page, size);
+      const fromApi = (await notificationsApi.list(page, size)) ?? [];
       // Merge với dữ liệu cache hiện tại (giữ lại WS notifications chưa vào DB)
       const cached: NotificationDto[] =
         qc.getQueryData([...notificationKeys.list, page, size]) ?? [];
@@ -41,11 +41,24 @@ export function useMarkRead() {
   return useMutation({
     mutationFn: (id: number) => notificationsApi.markRead(id),
     onMutate: (id) => {
+      const previousList = qc.getQueriesData<NotificationDto[]>({ queryKey: notificationKeys.list });
+      const previousCount = qc.getQueryData<number>(notificationKeys.unread);
       qc.setQueriesData<NotificationDto[]>(
         { queryKey: notificationKeys.list },
         (old) => old?.map((n) => (n.id === id ? { ...n, isRead: true } : n))
       );
       qc.setQueryData<number>(notificationKeys.unread, (old = 0) => Math.max(0, old - 1));
+      return { previousList, previousCount };
+    },
+    onError: (_err, _id, context) => {
+      context?.previousList?.forEach(([key, data]) => qc.setQueryData(key, data));
+      if (context?.previousCount !== undefined) {
+        qc.setQueryData(notificationKeys.unread, context.previousCount);
+      }
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: notificationKeys.list });
+      qc.invalidateQueries({ queryKey: notificationKeys.unread });
     },
   });
 }
@@ -55,11 +68,24 @@ export function useMarkAllRead() {
   return useMutation({
     mutationFn: () => notificationsApi.markAllRead(),
     onMutate: () => {
+      const previousList = qc.getQueriesData<NotificationDto[]>({ queryKey: notificationKeys.list });
+      const previousCount = qc.getQueryData<number>(notificationKeys.unread);
       qc.setQueriesData<NotificationDto[]>(
         { queryKey: notificationKeys.list },
         (old) => old?.map((n) => ({ ...n, isRead: true }))
       );
       qc.setQueryData<number>(notificationKeys.unread, 0);
+      return { previousList, previousCount };
+    },
+    onError: (_err, _vars, context) => {
+      context?.previousList?.forEach(([key, data]) => qc.setQueryData(key, data));
+      if (context?.previousCount !== undefined) {
+        qc.setQueryData(notificationKeys.unread, context.previousCount);
+      }
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: notificationKeys.list });
+      qc.invalidateQueries({ queryKey: notificationKeys.unread });
     },
   });
 }

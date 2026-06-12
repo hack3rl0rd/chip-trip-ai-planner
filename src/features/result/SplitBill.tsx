@@ -15,7 +15,7 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 
 interface SplitBillProps {
-  tripId: string;
+  tripId: number | string;
   memberNames: Record<string, string>;
   travelerCount?: number;
 }
@@ -187,7 +187,7 @@ const SplitBill = ({ tripId, memberNames, travelerCount = 2 }: SplitBillProps) =
       return;
     }
 
-    const paidBy = form.paid_by || members[0]?.id || user.id;
+    const paidBy = String(form.paid_by || members[0]?.id || user.id);
 
     setAdding(false);
     try {
