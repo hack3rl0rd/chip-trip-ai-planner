@@ -48,8 +48,22 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const updateProfile = (updated: Partial<UserProfile>) => {
     setProfile((prev) => (prev ? { ...prev, ...updated } : null));
-    if (updated.fullName) {
-      setUser((prev) => (prev ? { ...prev, fullName: updated.fullName ?? null } : null));
+    setUser((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        fullName: "fullName" in updated ? updated.fullName ?? null : prev.fullName,
+        role: updated.role ?? prev.role,
+      };
+    });
+
+    const storedUser = authStorage.getUser() as AuthResponse | null;
+    if (storedUser) {
+      authStorage.setUser({
+        ...storedUser,
+        fullName: "fullName" in updated ? updated.fullName ?? null : storedUser.fullName,
+        role: updated.role ?? storedUser.role,
+      });
     }
   };
 
@@ -101,7 +115,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       });
   }, [user?.id]);
 
-  const isAdmin = user?.role === "ROLE_ADMIN";
+  const isAdmin = (profile?.role ?? user?.role) === "ROLE_ADMIN";
 
   return (
     <AuthContext.Provider value={{ user, session, loading, profile, isAdmin, signOut, updateProfile }}>

@@ -79,6 +79,32 @@ export interface AuthResponse {
   role: string;
 }
 
+// ====== Payment (SePay) ======
+export type OrderStatus = "PENDING" | "PAID";
+
+export interface PaymentPlan {
+  code: string;
+  priceVnd: number;
+  credits: number;
+}
+
+export interface PaymentOrder {
+  orderId: number;
+  orderCode: string;
+  planCode: string;
+  amountVnd: number;
+  credits: number;
+  status: OrderStatus;
+  qrUrl: string;
+  bankName: string;
+  accountNumber: string;
+  accountHolder: string;
+  transferContent: string;
+  createdAt: string;
+  expiresAt: string;
+  paidAt: string | null;
+}
+
 export interface UserProfile {
   id: number;
   userId?: number;

@@ -1,0 +1,25 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__chrome-devtools__fill",
+      "mcp__chrome-devtools__click",
+      "mcp__chrome-devtools__wait_for",
+      "mcp__chrome-devtools__select_page",
+      "mcp__chrome-devtools__get_console_message",
+      "mcp__chrome-devtools__list_network_requests",
+      "Bash(ls -la \"D:\\\\Chiptrip_Project_BE\\\\Chiptrip-be\\\\\")",
+      "Read(//d/Chiptrip_Project_BE/**)",
+      "Bash(ls \"d:\\\\Chiptrip_Project_Full_stack\")",
+      "Read(//d/Chiptrip_Project_Full_stack/**)",
+      "Bash(Select-String -Pattern \"pom|gradle|mvnw\")",
+      "PowerShell(& \"d:\\\\Chiptrip_Project_Full_stack\\\\Chiptrip-be\\\\mvnw.cmd\" -f \"d:\\\\Chiptrip_Project_Full_stack\\\\Chiptrip-be\\\\pom.xml\" compile -q 2>&1)",
+      "WebFetch(domain:serpapi.com)"
+    ],
+    "additionalDirectories": [
+      "d:\\Chiptrip_Project_BE\\Chiptrip-be\\src\\main\\java\\com\\tranbac\\chiptripbe\\module\\notification\\service",
+      "d:\\Chiptrip_Project_Full_stack\\Chiptrip-be\\src\\main\\java\\com\\tranbac\\chiptripbe\\module\\geocoding\\client",
+      "d:\\Chiptrip_Project_Full_stack\\Chiptrip-be\\src\\main\\java\\com\\tranbac\\chiptripbe\\module\\place\\service\\impl",
+      "d:\\Chiptrip_Project_Full_stack\\Chiptrip-be\\src\\main\\java\\com\\tranbac\\chiptripbe\\common\\util"
+    ]
+  }
+}

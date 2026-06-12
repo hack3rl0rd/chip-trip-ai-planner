@@ -9,6 +9,7 @@ export { weatherApi } from "./modules/weather";
 export { notificationsApi } from "./modules/notifications";
 export { chatApi, adminChatApi } from "./modules/chat";
 export { flightsApi } from "./modules/flights";
+export { paymentsApi } from "./modules/payments";
 export { socialApi } from "./modules/social";
 export * from "./modules/social";
 export { placeReviewsApi } from "./modules/placeReviews";

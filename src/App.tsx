@@ -21,6 +21,7 @@ const JoinTripPage = lazy(() => import("@/features/explore/pages/JoinTripPage"))
 const Auth = lazy(() => import("@/app/pages/Auth"));
 const Premium = lazy(() => import("@/app/pages/Premium"));
 const Checkout = lazy(() => import("@/app/pages/Checkout"));
+const PaymentSuccess = lazy(() => import("@/app/pages/PaymentSuccess"));
 const Profile = lazy(() => import("@/app/pages/Profile"));
 const AdminUsers = lazy(() => import("@/features/admin/AdminUsers"));
 const AdminLogin = lazy(() => import("@/features/admin/AdminLogin"));
@@ -65,6 +66,7 @@ const App = () => (
               <Route path="/auth" element={<Auth />} />
               <Route path="/premium" element={<Premium />} />
               <Route path="/checkout" element={<Checkout />} />
+              <Route path="/checkout/success" element={<PaymentSuccess />} />
               <Route path="/profile" element={<Profile />} />
               <Route path="/admin/login" element={<AdminLogin />} />
               <Route path="/admin/dashboard" element={<Navigate to="/admin/users" replace />} />
