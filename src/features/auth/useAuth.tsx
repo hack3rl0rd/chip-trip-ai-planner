@@ -1,7 +1,9 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import { authStorage } from "@/integrations/api/client";
 import { authApi } from "@/integrations/api";
+import { userApi } from "@/integrations/api/modules/user";
 import type { AuthResponse, UserProfile } from "@/integrations/api/types";
+import { identifyUser, resetAnalytics } from "@/lib/analytics";
 
 interface AuthContextType {
   user: { id: number; email: string; fullName: string | null; role?: string } | null;
@@ -33,8 +35,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     try {
       await authApi.logout();
     } catch {
+      // Logout should still clear local state when the server call fails.
     }
     authStorage.clear();
+    resetAnalytics();
     setUser(null);
     setSession(null);
     setProfile(null);
@@ -59,7 +63,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       if (accessToken && refreshToken && storedUser) {
         setSession({ accessToken, refreshToken });
         setUser({ id: storedUser.userId, email: storedUser.email, fullName: storedUser.fullName ?? null, role: storedUser.role });
+        identifyUser(storedUser.userId, { email: storedUser.email, name: storedUser.fullName ?? undefined });
         setProfile({
+          id: storedUser.userId,
           userId: storedUser.userId,
           email: storedUser.email,
           fullName: storedUser.fullName ?? null,
@@ -81,6 +87,19 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     window.addEventListener("chiptrip-auth-change", onStorage);
     return () => window.removeEventListener("chiptrip-auth-change", onStorage);
   }, []);
+
+  // Đồng bộ profile đầy đủ từ BE (avatarUrl, aiCredits, createdAt...) —
+  // localStorage chỉ lưu AuthResponse nên thiếu các field này sau khi reload
+  useEffect(() => {
+    if (!user) return;
+    userApi.getMe()
+      .then(p => {
+        if (p) setProfile(prev => (prev ? { ...prev, ...p } : p));
+      })
+      .catch(() => {
+        // Keep the lightweight auth profile if /users/me is temporarily unavailable.
+      });
+  }, [user?.id]);
 
   const isAdmin = user?.role === "ROLE_ADMIN";
 

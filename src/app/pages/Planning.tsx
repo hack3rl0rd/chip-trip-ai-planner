@@ -2,13 +2,14 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
-import { Search, CalendarDays, ArrowRight, ArrowLeft, Sparkles, Loader2, Check, ArrowLeftRight, MapPin, Users, Wallet, AlertCircle, RotateCcw } from "lucide-react";
+import { CalendarDays, ArrowRight, ArrowLeft, Sparkles, Loader2, Check, ArrowLeftRight, MapPin, Users, AlertCircle, RotateCcw } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import { useAuth } from "@/features/auth/useAuth";
-import { tripsApi, aiApi } from "@/integrations/api";
+import { tripsApi, aiApi, placesApi, type PlaceLookupResult, type PlacePrediction } from "@/integrations/api";
+import { usePlaceAutocomplete } from "@/features/planning/usePlaceAutocomplete";
 import { mapTripDetailToPlan } from "@/lib/trip-mapper";
+import { analyticsError, trackEvent } from "@/lib/analytics";
 import { toast } from "sonner";
-import ChipMascot from "@/features/result/ChipMascot";
 
 const timeSlots = [
   { id: "morning", label: "Sáng", time: "6h-10h", emoji: "🌅" },
@@ -75,6 +76,11 @@ const regions = [
 type Branch = null | "known" | "suggest";
 type SuggestedPlace = { name: string; desc: string; emoji: string };
 
+const getTodayInputValue = () => {
+  const today = new Date();
+  return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+};
+
 const Planning = () => {
   const navigate = useNavigate();
   const { user, loading: authLoading } = useAuth();
@@ -107,8 +113,8 @@ const Planning = () => {
   // Suggest flow state
   const [vibes, setVibes] = useState<string[]>([]);
   const [customVibe, setCustomVibe] = useState("");
-  const [suggestBudget, setSuggestBudget] = useState([4]);
-  const [suggestDays, setSuggestDays] = useState(3);
+  const [suggestBudget] = useState([4]);
+  const [suggestDays] = useState(3);
   const [suggestedPlaces, setSuggestedPlaces] = useState<SuggestedPlace[]>([]);
   const [isSuggesting, setIsSuggesting] = useState(false);
   const [suggestStep, setSuggestStep] = useState(0); // 0: preferences, 1: results
@@ -130,18 +136,44 @@ const Planning = () => {
     setBudgetInput(clean ? Number(clean).toLocaleString("vi-VN") : "");
   };
 
-  const allPlaces = regions.flatMap(r => r.places);
-  const filteredOriginSuggestions = originFocused && origin.length > 0
-    ? allPlaces.filter(p => p.name.toLowerCase().includes(origin.toLowerCase()) && p.name.toLowerCase() !== origin.toLowerCase())
-    : [];
-  const filteredDestSuggestions = destFocused && destination.length > 0
-    ? allPlaces.filter(p => p.name.toLowerCase().includes(destination.toLowerCase()) && p.name.toLowerCase() !== destination.toLowerCase())
-    : [];
+  // Lat/lng đã resolve từ Goong Place/Detail sau khi user chọn 1 prediction.
+  // Lưu để future use khi BE generate trip nhận tọa độ trực tiếp.
+  const [originPlace, setOriginPlace] = useState<PlaceLookupResult | null>(null);
+  const [destPlace, setDestPlace] = useState<PlaceLookupResult | null>(null);
+
+  // Autocomplete qua Goong (backend proxy). Chỉ active khi input đang focus.
+  const { predictions: originPredictions } = usePlaceAutocomplete(origin, originFocused);
+  const { predictions: destPredictions } = usePlaceAutocomplete(destination, destFocused);
+
+  // Empty-state quick suggestions: khi focus + input trống, show 1 dải regions hardcode.
+  const quickSuggestions = regions.flatMap(r => r.places).slice(0, 6);
+  const showOriginQuick = originFocused && origin.trim().length === 0;
+  const showDestQuick = destFocused && destination.trim().length === 0;
+
+  const handlePickPrediction = async (
+    p: PlacePrediction,
+    setText: (s: string) => void,
+    setFocused: (b: boolean) => void,
+    setPlace: (p: PlaceLookupResult | null) => void,
+  ) => {
+    setText(p.mainText || p.description);
+    setFocused(false);
+    try {
+      const detail = await placesApi.lookupPlace(p.placeId);
+      setPlace(detail);
+    } catch (err) {
+      console.warn("lookupPlace failed:", err);
+      setPlace(null);
+    }
+  };
 
   const swapOriginDest = () => {
-    const tmp = origin;
+    const tmpText = origin;
+    const tmpPlace = originPlace;
     setOrigin(destination);
-    setDestination(tmp);
+    setDestination(tmpText);
+    setOriginPlace(destPlace);
+    setDestPlace(tmpPlace);
   };
 
   // AI suggest destinations
@@ -169,6 +201,7 @@ const Planning = () => {
 
   const selectSuggestedPlace = (place: SuggestedPlace) => {
     setDestination(place.name);
+    setDestPlace(null);
     setBranch("known");
     // Reset suggest state
     setSuggestStep(0);
@@ -176,8 +209,28 @@ const Planning = () => {
   };
 
   const BUDGET_VND_MAP = [400_000, 750_000, 1_500_000, 2_500_000, 4_000_000, 6_500_000, 10_000_000, 15_000_000];
+  const todayIso = getTodayInputValue();
+
+  const getDateValidationMessage = () => {
+    if (!dates.start || !dates.end) return "Vui long chon day du ngay di va ngay ve";
+    if (dates.start < todayIso) return "Ngay di khong duoc o qua khu";
+    if (dates.end < dates.start) return "Ngay ve phai sau hoac bang ngay di";
+    return null;
+  };
 
   const handleGenerate = async () => {
+    const dateError = getDateValidationMessage();
+    if (!origin.trim() || !destination.trim()) {
+      toast.error("Vui long nhap diem di va diem den");
+      setKnownStep(0);
+      return;
+    }
+    if (dateError) {
+      toast.error(dateError);
+      setKnownStep(0);
+      return;
+    }
+
     const budgetVnd = budgetInput
       ? parseInt(budgetInput.replace(/\D/g, ""), 10)
       : (BUDGET_VND_MAP[budget[0]] ?? 4_000_000);
@@ -189,6 +242,14 @@ const Planning = () => {
 
     setIsLoading(true);
     setError(null);
+    const analyticsPayload = {
+      destination,
+      origin,
+      peopleCount: travelers,
+      stylesCount: styles.length,
+      budgetVnd,
+    };
+    trackEvent("generate_started", analyticsPayload);
     try {
       const data = await tripsApi.generate({
         departure: origin,
@@ -204,6 +265,7 @@ const Planning = () => {
         tickets: travelers,
       });
 
+      trackEvent("generate_succeeded", { ...analyticsPayload, tripId: data.id });
       const trip = mapTripDetailToPlan(data);
       trip.days?.forEach((day) => {
         day.items?.forEach((item) => {
@@ -214,6 +276,7 @@ const Planning = () => {
       navigate("/result", { state: { trip, tripId: data.id } });
     } catch (err: any) {
       console.error("AI generation failed:", err);
+      trackEvent("generate_failed", { ...analyticsPayload, ...analyticsError(err) });
       const isTimeout = err.code === "ECONNABORTED" || err.message?.includes("timeout");
       const msg = isTimeout
         ? "AI mất quá nhiều thời gian xử lý. Lịch trình có thể đã được tạo — kiểm tra trong 'Chuyến đi của tôi', hoặc thử lại."
@@ -225,7 +288,7 @@ const Planning = () => {
   };
 
   const canNextKnown = () => {
-    if (knownStep === 0) return origin.length > 0 && destination.length > 0 && dates.start && dates.end;
+    if (knownStep === 0) return origin.trim().length > 0 && destination.trim().length > 0 && !getDateValidationMessage();
     if (knownStep === 1) return styles.length > 0;
     return true;
   };
@@ -278,32 +341,50 @@ const Planning = () => {
           <div className="flex flex-col sm:flex-row items-center gap-3">
             <div className="relative flex-1 w-full">
               <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-chip-orange" />
-              <input value={origin} onChange={(e) => setOrigin(e.target.value)} onFocus={() => setOriginFocused(true)} onBlur={() => setTimeout(() => setOriginFocused(false), 200)} placeholder="Điểm đi" className="w-full h-12 pl-11 pr-4 rounded-xl border-2 border-border bg-background text-foreground font-medium placeholder:text-muted-foreground focus:outline-none focus:border-chip-orange focus:ring-4 focus:ring-chip-orange/10 transition-all" />
-              {filteredOriginSuggestions.length > 0 && (
+              <input value={origin} onChange={(e) => { setOrigin(e.target.value); setOriginPlace(null); }} onFocus={() => setOriginFocused(true)} onBlur={() => setTimeout(() => setOriginFocused(false), 200)} placeholder="Điểm đi" className="w-full h-12 pl-11 pr-4 rounded-xl border-2 border-border bg-background text-foreground font-medium placeholder:text-muted-foreground focus:outline-none focus:border-chip-orange focus:ring-4 focus:ring-chip-orange/10 transition-all" />
+              {originPredictions.length > 0 ? (
                 <div className="absolute top-full left-0 right-0 mt-1 bg-card border border-border rounded-xl shadow-warm overflow-hidden z-20">
-                  {filteredOriginSuggestions.slice(0, 5).map(s => (
-                    <button key={s.name} onClick={() => { setOrigin(s.name); setOriginFocused(false); }} className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-muted/50 transition-colors text-left text-sm">
+                  {originPredictions.slice(0, 5).map(p => (
+                    <button key={p.placeId} onMouseDown={(e) => e.preventDefault()} onClick={() => handlePickPrediction(p, setOrigin, setOriginFocused, setOriginPlace)} className="w-full flex flex-col items-start gap-0.5 px-4 py-2.5 hover:bg-muted/50 transition-colors text-left text-sm">
+                      <span className="font-medium text-foreground">{p.mainText}</span>
+                      {p.secondaryText && <span className="text-xs text-muted-foreground">{p.secondaryText}</span>}
+                    </button>
+                  ))}
+                </div>
+              ) : showOriginQuick ? (
+                <div className="absolute top-full left-0 right-0 mt-1 bg-card border border-border rounded-xl shadow-warm overflow-hidden z-20">
+                  {quickSuggestions.map(s => (
+                    <button key={s.name} onMouseDown={(e) => e.preventDefault()} onClick={() => { setOrigin(s.name); setOriginPlace(null); setOriginFocused(false); }} className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-muted/50 transition-colors text-left text-sm">
                       <span>{s.emoji}</span><span className="font-medium text-foreground">{s.name}</span>
                     </button>
                   ))}
                 </div>
-              )}
+              ) : null}
             </div>
             <button onClick={swapOriginDest} className="w-10 h-10 rounded-full border-2 border-border bg-background flex items-center justify-center text-chip-orange hover:border-chip-orange hover:bg-chip-orange/10 transition-all shrink-0">
               <ArrowLeftRight className="w-4 h-4" />
             </button>
             <div className="relative flex-1 w-full">
               <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-primary" />
-              <input value={destination} onChange={(e) => setDestination(e.target.value)} onFocus={() => setDestFocused(true)} onBlur={() => setTimeout(() => setDestFocused(false), 200)} placeholder="Điểm đến" className="w-full h-12 pl-11 pr-4 rounded-xl border-2 border-border bg-background text-foreground font-medium placeholder:text-muted-foreground focus:outline-none focus:border-chip-orange focus:ring-4 focus:ring-chip-orange/10 transition-all" />
-              {filteredDestSuggestions.length > 0 && (
+              <input value={destination} onChange={(e) => { setDestination(e.target.value); setDestPlace(null); }} onFocus={() => setDestFocused(true)} onBlur={() => setTimeout(() => setDestFocused(false), 200)} placeholder="Điểm đến" className="w-full h-12 pl-11 pr-4 rounded-xl border-2 border-border bg-background text-foreground font-medium placeholder:text-muted-foreground focus:outline-none focus:border-chip-orange focus:ring-4 focus:ring-chip-orange/10 transition-all" />
+              {destPredictions.length > 0 ? (
                 <div className="absolute top-full left-0 right-0 mt-1 bg-card border border-border rounded-xl shadow-warm overflow-hidden z-20">
-                  {filteredDestSuggestions.slice(0, 5).map(s => (
-                    <button key={s.name} onClick={() => { setDestination(s.name); setDestFocused(false); }} className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-muted/50 transition-colors text-left text-sm">
+                  {destPredictions.slice(0, 5).map(p => (
+                    <button key={p.placeId} onMouseDown={(e) => e.preventDefault()} onClick={() => handlePickPrediction(p, setDestination, setDestFocused, setDestPlace)} className="w-full flex flex-col items-start gap-0.5 px-4 py-2.5 hover:bg-muted/50 transition-colors text-left text-sm">
+                      <span className="font-medium text-foreground">{p.mainText}</span>
+                      {p.secondaryText && <span className="text-xs text-muted-foreground">{p.secondaryText}</span>}
+                    </button>
+                  ))}
+                </div>
+              ) : showDestQuick ? (
+                <div className="absolute top-full left-0 right-0 mt-1 bg-card border border-border rounded-xl shadow-warm overflow-hidden z-20">
+                  {quickSuggestions.map(s => (
+                    <button key={s.name} onMouseDown={(e) => e.preventDefault()} onClick={() => { setDestination(s.name); setDestPlace(null); setDestFocused(false); }} className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-muted/50 transition-colors text-left text-sm">
                       <span>{s.emoji}</span><span className="font-medium text-foreground">{s.name}</span>
                     </button>
                   ))}
                 </div>
-              )}
+              ) : null}
             </div>
           </div>
 
@@ -311,7 +392,10 @@ const Planning = () => {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="space-y-2">
               <label className="text-xs font-medium text-muted-foreground flex items-center gap-1.5"><CalendarDays className="w-3.5 h-3.5" /> Ngày đi</label>
-              <input type="date" value={dates.start} onChange={(e) => setDates({ ...dates, start: e.target.value })} className="w-full h-11 px-4 rounded-xl border-2 border-border bg-background text-foreground font-medium focus:outline-none focus:border-chip-orange focus:ring-4 focus:ring-chip-orange/10 transition-all" />
+              <input type="date" min={todayIso} value={dates.start} onChange={(e) => {
+                const start = e.target.value;
+                setDates(prev => ({ start, end: prev.end && prev.end < start ? "" : prev.end }));
+              }} className="w-full h-11 px-4 rounded-xl border-2 border-border bg-background text-foreground font-medium focus:outline-none focus:border-chip-orange focus:ring-4 focus:ring-chip-orange/10 transition-all" />
               <div className="flex gap-1.5">
                 {timeSlots.map(ts => (
                   <button key={ts.id} onClick={() => setDepartureTime(ts.id)} className={`flex-1 flex flex-col items-center gap-0.5 px-1 py-1.5 rounded-lg border-2 text-[10px] font-medium transition-all ${departureTime === ts.id ? "border-chip-orange bg-chip-orange/10 text-chip-orange" : "border-border bg-background text-muted-foreground hover:border-chip-orange/40"}`}>
@@ -322,7 +406,7 @@ const Planning = () => {
             </div>
             <div className="space-y-2">
               <label className="text-xs font-medium text-muted-foreground flex items-center gap-1.5"><CalendarDays className="w-3.5 h-3.5" /> Ngày về</label>
-              <input type="date" value={dates.end} onChange={(e) => setDates({ ...dates, end: e.target.value })} className="w-full h-11 px-4 rounded-xl border-2 border-border bg-background text-foreground font-medium focus:outline-none focus:border-chip-orange focus:ring-4 focus:ring-chip-orange/10 transition-all" />
+              <input type="date" min={dates.start || todayIso} value={dates.end} onChange={(e) => setDates({ ...dates, end: e.target.value })} className="w-full h-11 px-4 rounded-xl border-2 border-border bg-background text-foreground font-medium focus:outline-none focus:border-chip-orange focus:ring-4 focus:ring-chip-orange/10 transition-all" />
               <div className="flex gap-1.5">
                 {timeSlots.map(ts => (
                   <button key={ts.id} onClick={() => setReturnTime(ts.id)} className={`flex-1 flex flex-col items-center gap-0.5 px-1 py-1.5 rounded-lg border-2 text-[10px] font-medium transition-all ${returnTime === ts.id ? "border-chip-orange bg-chip-orange/10 text-chip-orange" : "border-border bg-background text-muted-foreground hover:border-chip-orange/40"}`}>

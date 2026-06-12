@@ -1,16 +1,17 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Calendar, Eye, Trash2, Plus, Pencil, Check, X, Loader2, Share2 } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import Navbar from "@/components/Navbar";
 import { type TripPlan } from "@/features/planning/trip-data";
+import type { TripLifecycleStatus } from "@/integrations/api/types";
 import { getPlaceImage } from "@/features/planning/place-image";
-import tripDanang from "@/assets/trip-danang.jpg";
 import { toast } from "sonner";
 import { useAuth } from "@/features/auth/useAuth";
+import { tripsApi } from "@/integrations/api";
 import { useMyTrips, useDeleteTrip } from "@/hooks/useApi";
-import { mapTripSummaryToCard, mapTripDetailToPlan } from "@/lib/trip-mapper";
+import { parseTripStyles } from "@/lib/trip-mapper";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
@@ -23,6 +24,7 @@ const SavedPlans = () => {
   const deleteMutation = useDeleteTrip();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState("");
+  const [tab, setTab] = useState<TripLifecycleStatus>("UPCOMING");
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -33,6 +35,8 @@ const SavedPlans = () => {
   const trips = (tripsData || []).map((t) => ({
     id: String(t.id),
     imageUrl: t.imageUrl || null,
+    isPublic: !!t.isPublic,
+    status: (t.status || "UPCOMING") as TripLifecycleStatus,
     trip: {
       id: String(t.id),
       destination: t.destination,
@@ -42,13 +46,30 @@ const SavedPlans = () => {
       rating: 4.8,
       duration: "",
       image: t.imageUrl || "/placeholder.svg",
-      tags: t.styles ? (() => { try { return JSON.parse(t.styles); } catch { return []; } })() : [],
+      tags: parseTripStyles(t.styles),
       dateRange: t.dateStart && t.dateEnd
         ? `${new Date(t.dateStart).toLocaleDateString("vi-VN")} - ${new Date(t.dateEnd).toLocaleDateString("vi-VN")}`
         : new Date(t.createdAt).toLocaleDateString("vi-VN"),
     } as TripPlan,
     created_at: t.createdAt,
   }));
+
+  const counts = {
+    UPCOMING: trips.filter((t) => t.status === "UPCOMING").length,
+    ONGOING: trips.filter((t) => t.status === "ONGOING").length,
+    COMPLETED: trips.filter((t) => t.status === "COMPLETED").length,
+  };
+  const visibleTrips = trips.filter((t) => t.status === tab);
+
+  // Mở mặc định tab có chuyến phù hợp nhất: Đang đi > Sắp đi > Đã đi (chạy 1 lần khi data về)
+  const didInitTab = useRef(false);
+  useEffect(() => {
+    if (didInitTab.current || !tripsData) return;
+    didInitTab.current = true;
+    if (counts.ONGOING > 0) setTab("ONGOING");
+    else if (counts.UPCOMING > 0) setTab("UPCOMING");
+    else if (counts.COMPLETED > 0) setTab("COMPLETED");
+  }, [tripsData]);
 
   const handleDelete = async (id: string) => {
     await deleteMutation.mutateAsync(Number(id));
@@ -65,9 +86,8 @@ const SavedPlans = () => {
     refetch();
   };
 
-  const handleShareTrip = async (id: string, title: string) => {
+  const handleShareTrip = async (id: string) => {
     try {
-      const { tripsApi } = await import("@/integrations/api");
       const result = await tripsApi.enableShare(Number(id));
       const shareUrl = `${window.location.origin}/result?shared=${result.shareToken}`;
       await navigator.clipboard.writeText(shareUrl);
@@ -98,6 +118,33 @@ const SavedPlans = () => {
             </Link>
           </motion.div>
 
+          {/* Tab trạng thái chuyến đi */}
+          {!isLoading && trips.length > 0 && (
+            <div className="flex gap-2 mb-6 overflow-x-auto pb-1 scrollbar-none">
+              {([
+                { key: "UPCOMING" as const, label: "Sắp đi" },
+                { key: "ONGOING" as const, label: "Đang đi" },
+                { key: "COMPLETED" as const, label: "Đã đi" },
+              ]).map(({ key, label }) => (
+                <button
+                  key={key}
+                  onClick={() => setTab(key)}
+                  className={`flex-shrink-0 inline-flex items-center gap-2 px-4 py-2 rounded-xl border-2 text-sm font-medium transition-all ${
+                    tab === key
+                      ? "border-chip-orange bg-chip-orange/10 text-chip-orange"
+                      : "border-border bg-card text-muted-foreground hover:border-chip-orange/40"
+                  }`}
+                >
+                  {key === "ONGOING" && counts.ONGOING > 0 && <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />}
+                  {label}
+                  <span className={`px-1.5 py-0.5 rounded-full text-xs font-bold ${tab === key ? "bg-chip-orange text-white" : "bg-muted text-muted-foreground"}`}>
+                    {counts[key]}
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
+
           {isLoading ? (
             <div className="flex flex-col items-center justify-center py-20 gap-4">
               <Loader2 className="w-8 h-8 animate-spin text-chip-orange" />
@@ -109,10 +156,17 @@ const SavedPlans = () => {
               <p className="text-muted-foreground text-lg">Chưa có chuyến đi nào được lưu</p>
               <Link to="/planning"><Button variant="hero">Tạo chuyến đi đầu tiên</Button></Link>
             </motion.div>
+          ) : visibleTrips.length === 0 ? (
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col items-center justify-center py-16 gap-3">
+              <span className="text-5xl">{tab === "UPCOMING" ? "🧳" : tab === "ONGOING" ? "✈️" : "📸"}</span>
+              <p className="text-muted-foreground">
+                {tab === "UPCOMING" ? "Không có chuyến nào sắp đi" : tab === "ONGOING" ? "Không có chuyến nào đang diễn ra" : "Chưa có chuyến nào đã đi"}
+              </p>
+            </motion.div>
           ) : (
             <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
               <AnimatePresence>
-                {trips.map(({ id, trip, imageUrl }, i) => (
+                {visibleTrips.map(({ id, trip, imageUrl, isPublic, status }, i) => (
                   <motion.div
                     key={id}
                     initial={{ opacity: 0, y: 20 }}
@@ -127,6 +181,21 @@ const SavedPlans = () => {
                         {trip.tags?.slice(0, 2).map((tag) => (
                           <span key={tag} className="px-2.5 py-1 rounded-full bg-background/80 backdrop-blur-sm text-xs font-medium text-foreground">{tag}</span>
                         ))}
+                      </div>
+                      <div className="absolute top-3 left-3 flex flex-col items-start gap-1.5">
+                        {status === "ONGOING" && (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-green-500 text-white text-xs font-semibold shadow-warm">
+                            <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" /> Đang đi
+                          </span>
+                        )}
+                        {status === "COMPLETED" && (
+                          <span className="px-2.5 py-1 rounded-full bg-foreground/70 text-background text-xs font-semibold">✓ Đã đi</span>
+                        )}
+                        {isPublic && (
+                          <span className="px-2.5 py-1 rounded-full bg-chip-orange text-white text-xs font-semibold shadow-warm">
+                            🌏 Công khai
+                          </span>
+                        )}
                       </div>
                     </div>
                     <div className="p-4 space-y-3">
@@ -151,7 +220,7 @@ const SavedPlans = () => {
                         <Button variant="soft" size="sm" className="flex-1" onClick={() => navigate(`/result?id=${id}`)}>
                           <Eye className="w-3.5 h-3.5" /> Xem lại
                         </Button>
-                        <Button variant="outline" size="sm" onClick={() => handleShareTrip(id, trip.title)} title="Chia sẻ">
+                        <Button variant="outline" size="sm" onClick={() => handleShareTrip(id)} title="Chia sẻ">
                           <Share2 className="w-3.5 h-3.5" />
                         </Button>
                         <AlertDialog>

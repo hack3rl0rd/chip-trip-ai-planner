@@ -122,29 +122,29 @@ const GoongMap = ({ pins, routes, className, onPinClick }: Props) => {
             });
         }
 
-        // Add markers for each pin
+        // Add markers for each pin — chấm tròn + label tên địa điểm bên dưới
         pins.forEach((pin, i) => {
-          // Create a custom HTML marker element
           const el = document.createElement('div');
-          el.style.cssText = `
-            width: 20px;
-            height: 20px;
-            border-radius: 50%;
-            background-color: ${i === 0 ? '#f97316' : '#6366f1'};
-            border: 3px solid white;
-            box-shadow: 0 2px 6px rgba(0,0,0,0.3);
-            cursor: pointer;
-          `;
+          el.className = 'goong-custom-marker';
 
-          const marker = new goongjs.Marker({ element: el })
+          const dot = document.createElement('div');
+          dot.className = 'marker-dot';
+          dot.style.backgroundColor = i === 0 ? '#f97316' : '#6366f1';
+
+          const label = document.createElement('div');
+          label.className = 'marker-label';
+          label.textContent = pin.title;
+
+          el.appendChild(dot);
+          el.appendChild(label);
+
+          new goongjs.Marker({ element: el })
             .setLngLat([pin.lng, pin.lat])
             .addTo(map);
 
-          // Add popup
-          const popup = new goongjs.Popup({ offset: 15, closeButton: false })
-            .setText(pin.title);
-          marker.setPopup(popup);
-
+          // Hover: nổi label lên trên các marker khác khi bị overlap
+          el.addEventListener('mouseenter', () => { el.style.zIndex = '10'; });
+          el.addEventListener('mouseleave', () => { el.style.zIndex = '1'; });
           el.addEventListener('click', () => {
             onPinClickRef.current?.(i);
           });

@@ -4,9 +4,11 @@ import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, MapPin, Star, Clock, Wallet, Lightbulb, ExternalLink, Hotel, UtensilsCrossed, Ticket, Coffee, Phone, Globe, ChevronLeft, ChevronRight, X, ZoomIn } from "lucide-react";
 import Navbar from "@/components/Navbar";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { TripItem } from "@/features/planning/trip-data";
 import { getPlaceImage } from "@/features/planning/place-image";
 import { usePlaceDetail } from "@/hooks/useApi";
+import ChipTripReviews from "@/features/location/components/ChipTripReviews";
 
 const bookingConfig: Record<string, { icon: React.ElementType; label: string; platform: string }> = {
   hotel: { icon: Hotel, label: "Đặt phòng trên Traveloka", platform: "traveloka.com" },
@@ -22,6 +24,7 @@ const LocationDetail = () => {
   const navigate = useNavigate();
   const { state } = useLocation();
   const item = state?.item as TripItem | undefined;
+  const destination = state?.destination as string | undefined;
 
   const [activePhotoIndex, setActivePhotoIndex] = useState(0);
   const [isLightboxOpen, setIsLightboxOpen] = useState(false);
@@ -41,8 +44,25 @@ const LocationDetail = () => {
     );
   }
 
-  const config = bookingConfig[item.bookingType || "attraction"] || bookingConfig.attraction;
-  const BookingIcon = config.icon;
+  const baseConfig = bookingConfig[item.bookingType || "attraction"] || bookingConfig.attraction;
+  const BookingIcon = baseConfig.icon;
+  let label = baseConfig.label;
+
+  if (item.bookingUrl) {
+    if (item.bookingUrl.toLowerCase().includes("trip.com")) {
+      label = "Đặt phòng trên Trip.com";
+    } else if (item.bookingUrl.toLowerCase().includes("agoda.com")) {
+      label = "Đặt phòng trên Agoda";
+    } else if (item.bookingUrl.toLowerCase().includes("booking.com")) {
+      label = "Đặt phòng trên Booking.com";
+    } else if (item.bookingUrl.toLowerCase().includes("traveloka.com")) {
+      label = "Đặt phòng trên Traveloka";
+    } else if (item.bookingUrl.toLowerCase().includes("hopegoo.com")) {
+      label = "Đặt phòng trên HOPEGOO";
+    } else if (item.bookingUrl.toLowerCase().includes("edreams.net")) {
+      label = "Đặt phòng trên eDreams";
+    }
+  }
 
   const openMap = () => {
     const query = item.lat && item.lng
@@ -80,7 +100,7 @@ const LocationDetail = () => {
   // Format address fallback: if it's coordinate lat,lng -> change to name/title
   const cleanAddress = address && !/^[0-9.-]+\s*,\s*[0-9.-]+$/.test(address)
     ? address
-    : `${item.title}, Đà Lạt, Lâm Đồng`;
+    : `${item.title}${destination ? `, ${destination}` : ""}`;
 
 // Simulated reviews removed
 
@@ -298,49 +318,68 @@ const LocationDetail = () => {
               </div>
             )}
 
-            {/* Reviews List */}
+            {/* Reviews — 2 tab: Google (serpReviews) + ChipTrip (place_reviews DB) */}
             <div className="border-t border-border pt-6 space-y-4">
               <h2 className="text-lg font-bold text-foreground flex items-center gap-2">
                 <Star className="w-5 h-5 text-chip-yellow fill-chip-yellow" />
                 Đánh giá từ du khách
               </h2>
-              <div className="space-y-4">
-                {placeDetail?.reviews && placeDetail.reviews.length > 0 ? (
-                  placeDetail.reviews.map((review, idx) => (
-                    <div key={idx} className="p-4 rounded-xl bg-muted/30 border border-border/50 space-y-2">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2.5">
-                          {review.avatar ? (
-                            <img src={review.avatar} alt="" className="w-8 h-8 rounded-full object-cover" />
-                          ) : (
-                            <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-xs font-bold text-primary">
-                              {review.author?.charAt(0) || "U"}
+              <Tabs defaultValue="google" className="w-full">
+                <TabsList className="w-full grid grid-cols-2">
+                  <TabsTrigger value="google">Đánh giá từ Google</TabsTrigger>
+                  <TabsTrigger value="chiptrip">Đánh giá ChipTrip</TabsTrigger>
+                </TabsList>
+
+                <TabsContent value="google" className="mt-4">
+                  <div className="space-y-4">
+                    {placeDetail?.reviews && placeDetail.reviews.length > 0 ? (
+                      placeDetail.reviews.map((review, idx) => (
+                        <div key={idx} className="p-4 rounded-xl bg-muted/30 border border-border/50 space-y-2">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2.5">
+                              {review.avatar ? (
+                                <img src={review.avatar} alt="" className="w-8 h-8 rounded-full object-cover" />
+                              ) : (
+                                <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-xs font-bold text-primary">
+                                  {review.author?.charAt(0) || "U"}
+                                </div>
+                              )}
+                              <div>
+                                <p className="text-sm font-semibold text-foreground">{review.author || "Người dùng ẩn danh"}</p>
+                                <p className="text-xs text-muted-foreground">{review.time}</p>
+                              </div>
                             </div>
-                          )}
-                          <div>
-                            <p className="text-sm font-semibold text-foreground">{review.author || "Người dùng ẩn danh"}</p>
-                            <p className="text-xs text-muted-foreground">{review.time}</p>
+                            <div className="flex items-center gap-1 bg-chip-yellow/10 px-2 py-0.5 rounded-lg">
+                              <Star className="w-3.5 h-3.5 text-chip-yellow fill-chip-yellow" />
+                              <span className="text-xs font-bold text-chip-yellow">{review.rating}</span>
+                            </div>
                           </div>
+                          <p className="text-sm text-muted-foreground leading-relaxed">{review.text}</p>
                         </div>
-                        <div className="flex items-center gap-1 bg-chip-yellow/10 px-2 py-0.5 rounded-lg">
-                          <Star className="w-3.5 h-3.5 text-chip-yellow fill-chip-yellow" />
-                          <span className="text-xs font-bold text-chip-yellow">{review.rating}</span>
-                        </div>
-                      </div>
-                      <p className="text-sm text-muted-foreground leading-relaxed">{review.text}</p>
-                    </div>
-                  ))
-                ) : (
-                  <p className="text-sm text-muted-foreground text-center py-4">Chưa có đánh giá nào từ Google Maps.</p>
-                )}
-              </div>
+                      ))
+                    ) : (
+                      <p className="text-sm text-muted-foreground text-center py-4">Chưa có đánh giá nào từ Google Maps.</p>
+                    )}
+                  </div>
+                </TabsContent>
+
+                <TabsContent value="chiptrip" className="mt-4">
+                  {item.placeCacheId != null ? (
+                    <ChipTripReviews placeCacheId={item.placeCacheId} />
+                  ) : (
+                    <p className="text-sm text-muted-foreground text-center py-4">
+                      Địa điểm này chưa hỗ trợ đánh giá ChipTrip.
+                    </p>
+                  )}
+                </TabsContent>
+              </Tabs>
             </div>
 
             {/* Affiliate CTA */}
             <div className="space-y-2 pt-2">
               <Button variant="hero" className="w-full" onClick={handleBooking}>
                 <BookingIcon className="w-4 h-4" />
-                {config.label}
+                {label}
                 <ExternalLink className="w-3.5 h-3.5 ml-1" />
               </Button>
               <Button variant="soft" className="w-full" onClick={openMap}>

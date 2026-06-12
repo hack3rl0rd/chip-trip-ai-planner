@@ -2,7 +2,6 @@ import { Link, useLocation } from "react-router-dom";
 import { useEffect, useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { MapPin, User, Zap, Moon, Sun, Crown, LogOut, Settings, UserCircle } from "lucide-react";
-import { getCredits } from "@/features/planning/trip-data";
 import { useAuth } from "@/features/auth/useAuth";
 import { NotificationBell } from "@/features/notifications/NotificationBell";
 import { toast } from "sonner";
@@ -10,8 +9,8 @@ import { motion, AnimatePresence } from "framer-motion";
 
 const Navbar = () => {
   const location = useLocation();
-  const credits = getCredits();
   const { user, profile, signOut, isAdmin } = useAuth();
+  const credits = profile?.aiCredits ?? 0;
   const [dark, setDark] = useState(() => {
     if (typeof window !== "undefined") {
       return document.documentElement.classList.contains("dark");
@@ -107,6 +106,11 @@ const Navbar = () => {
               </Button>
             </Link>
           )}
+          <Link to="/explore">
+            <Button variant="ghost" size="sm" className={`hidden sm:inline-flex ${location.pathname === "/explore" ? "bg-chip-yellow-light" : ""}`}>
+              Khám phá
+            </Button>
+          </Link>
           <Link to="/saved">
             <Button variant="ghost" size="sm" className={`hidden sm:inline-flex ${location.pathname === "/saved" ? "bg-chip-yellow-light" : ""}`}>
               Chuyến đi của tôi

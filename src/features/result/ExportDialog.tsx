@@ -9,7 +9,7 @@ import { tripsApi } from "@/integrations/api";
 
 interface Props {
   trip: TripPlan;
-  dbTripId?: string | null;
+  dbTripId?: number | string | null;
   children: React.ReactNode;
 }
 

@@ -1,5 +1,5 @@
 import { Link, useLocation } from "react-router-dom";
-import { Home, Map, Bookmark, User, Shield } from "lucide-react";
+import { Home, Map, Bookmark, User, Shield, Compass } from "lucide-react";
 import { useAuth } from "@/features/auth/useAuth";
 
 const MobileNav = () => {
@@ -9,8 +9,10 @@ const MobileNav = () => {
   // Hide on admin pages
   if (location.pathname.startsWith("/admin")) return null;
 
+  // Khám phá hiện cho cả guest — feed public không cần đăng nhập
   const userLinks = [
     { path: "/", label: "Trang chủ", icon: Home },
+    { path: "/explore", label: "Khám phá", icon: Compass },
     { path: "/planning", label: "Tạo mới", icon: Map },
     { path: "/saved", label: "Đã lưu", icon: Bookmark },
   ];

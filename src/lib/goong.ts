@@ -1,8 +1,9 @@
-// ─── Goong REST API client ────────────────────────────────────────────────────
-// Sử dụng Goong REST API thay vì Google Maps API
+// ─── Goong route helpers ──────────────────────────────────────────────────────
+// Direction/DistanceMatrix/Reverse Geocode đều proxy qua BE (/api/v1/routes/*).
+// Maptiles token vẫn ở FE (VITE_GOONG_MAPTILES_KEY) cho map JS render trong GoongMap.tsx.
 
-const GOONG_API_KEY = import.meta.env.VITE_GOONG_API_KEY as string;
-const GOONG_API_BASE = 'https://rsapi.goong.io';
+import apiClient from "@/integrations/api/client";
+import type { ApiResponse } from "@/integrations/api/types";
 
 // ─── Polyline decoder (Google Encoded Polyline format — Goong dùng cùng format) ─
 
@@ -37,12 +38,11 @@ export interface DirectionResult {
   polyline: [number, number][];  // decoded GeoJSON coords [lng, lat]
 }
 
-const VEHICLE_MAP: Record<string, string> = {
-  car:  'car',
-  taxi: 'car',
-  bike: 'bike',
-  hd:   'car',
-};
+interface DirectionResponse {
+  distanceMeters: number;
+  durationSeconds: number;
+  overviewPolyline: string;
+}
 
 export async function getDirection(
   origin: { lat: number; lng: number },
@@ -50,18 +50,14 @@ export async function getDirection(
   vehicle: 'car' | 'bike' | 'taxi' | 'hd' = 'car',
 ): Promise<DirectionResult | null> {
   try {
-    const vehicle_type = VEHICLE_MAP[vehicle] ?? 'car';
-    const url = `${GOONG_API_BASE}/Direction?origin=${origin.lat},${origin.lng}&destination=${dest.lat},${dest.lng}&vehicle=${vehicle_type}&api_key=${GOONG_API_KEY}`;
-    const res = await fetch(url);
-    if (!res.ok) return null;
-    const data = await res.json();
-    const route = data?.routes?.[0];
-    if (!route) return null;
-    const leg = route.legs?.[0];
+    const { data } = await apiClient.get<ApiResponse<DirectionResponse | null>>('/routes/direction', {
+      params: { oLat: origin.lat, oLng: origin.lng, dLat: dest.lat, dLng: dest.lng, vehicle },
+    });
+    if (!data.data) return null;
     return {
-      distance: leg?.distance?.value ?? 0,
-      duration: leg?.duration?.value ?? 0,
-      polyline: decodePolyline(route.overview_polyline?.points ?? ''),
+      distance: data.data.distanceMeters,
+      duration: data.data.durationSeconds,
+      polyline: decodePolyline(data.data.overviewPolyline ?? ''),
     };
   } catch {
     return null;
@@ -75,55 +71,35 @@ export interface TravelSegment {
   duration: number;  // seconds
 }
 
+interface DistanceMatrixResponse {
+  segments: Array<{ distanceMeters: number; durationSeconds: number } | null>;
+}
+
 export async function getConsecutiveTravelTimes(
   points: Array<{ lat: number; lng: number }>,
   vehicle: 'car' | 'bike' | 'taxi' | 'hd' = 'car',
 ): Promise<Array<TravelSegment | null>> {
   if (points.length < 2) return [];
-
-  const origins = points.slice(0, -1);
-  const dests = points.slice(1);
-  const vehicle_type = VEHICLE_MAP[vehicle] ?? 'car';
-
-  // Goong Distance Matrix: origins và destinations là chuỗi lat,lng ngăn cách bởi |
-  const originsStr = origins.map(p => `${p.lat},${p.lng}`).join('|');
-  const destsStr = dests.map(p => `${p.lat},${p.lng}`).join('|');
-
   try {
-    const url = `${GOONG_API_BASE}/DistanceMatrix?origins=${encodeURIComponent(originsStr)}&destinations=${encodeURIComponent(destsStr)}&vehicle=${vehicle_type}&api_key=${GOONG_API_KEY}`;
-    const res = await fetch(url);
-    if (!res.ok) return new Array(origins.length).fill(null);
-    const data = await res.json();
-    // rows[i].elements[i] = origins[i] → destinations[i] (diagonal)
-    return (data.rows ?? []).map((row: any, i: number) => {
-      const el = row.elements?.[i];
-      if (el?.status === 'OK') {
-        return { distance: el.distance.value, duration: el.duration.value };
-      }
-      return null;
-    });
+    const { data } = await apiClient.post<ApiResponse<DistanceMatrixResponse>>(
+      '/routes/distance-matrix',
+      { points, vehicle },
+    );
+    const segs = data.data?.segments ?? [];
+    return segs.map(s => s ? { distance: s.distanceMeters, duration: s.durationSeconds } : null);
   } catch {
-    return new Array(origins.length).fill(null);
+    return new Array(points.length - 1).fill(null);
   }
 }
 
-// ─── Reverse Geocode → city name ─────────────────────────────────────────────
+// ─── Reverse Geocode → province name ─────────────────────────────────────────
 
 export async function reverseGeocode(lat: number, lng: number): Promise<string | null> {
   try {
-    const url = `${GOONG_API_BASE}/Geocode/reverse?latlng=${lat},${lng}&api_key=${GOONG_API_KEY}`;
-    const res = await fetch(url);
-    if (!res.ok) return null;
-    const data = await res.json();
-    const first = data?.results?.[0];
-    if (!first) return null;
-    // Tìm province trong address_components
-    const province = first.address_components?.find((c: any) =>
-      c.types?.includes('administrative_area_level_1')
-    );
-    if (province) return province.long_name;
-    const parts = first.formatted_address?.split(',');
-    return parts?.at(-1)?.trim() ?? null;
+    const { data } = await apiClient.get<ApiResponse<string | null>>('/routes/reverse-geocode', {
+      params: { lat, lng },
+    });
+    return data.data ?? null;
   } catch {
     return null;
   }

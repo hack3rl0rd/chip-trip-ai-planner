@@ -5,9 +5,12 @@ import {
   Users, MapPin, Shield, ArrowLeft, Loader2,
   Trash2, BarChart3, Plane, Search, Eye,
   DollarSign, BrainCircuit, CreditCard, Zap,
-  UserX, UserCheck, LogOut, Moon, Sun, MessageCircle,
+  UserX, UserCheck, LogOut, Moon, Sun, MessageCircle, ShieldAlert,
+  Heart, Star, ShoppingCart, Globe,
 } from "lucide-react";
 import { useAdminConversations } from "@/features/chat/useAdminChat";
+import AdminReports from "@/features/admin/AdminReports";
+import { useReportsPendingCount } from "@/features/moderation/useModeration";
 
 function AdminChatNavLink() {
   const { data: conversations = [] } = useAdminConversations("OPEN");
@@ -44,17 +47,36 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { format, subDays } from "date-fns";
 import { vi } from "date-fns/locale";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line } from "recharts";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, FunnelChart, Funnel, LabelList } from "recharts";
 import { toast } from "sonner";
 
-type AdminTab = "overview" | "trips" | "ai-usage" | "analytics";
+type AdminTab = "overview" | "trips" | "ai-usage" | "analytics" | "moderation";
 
 const NAV_ITEMS: { key: AdminTab; label: string; icon: React.ElementType }[] = [
+  { key: "analytics",  label: "Thống kê",    icon: BarChart3 },
   { key: "overview",   label: "Người dùng",  icon: Users },
   { key: "trips",      label: "Chuyến đi",   icon: Plane },
+  { key: "moderation", label: "Kiểm duyệt",  icon: ShieldAlert },
   { key: "ai-usage",   label: "AI Usage",    icon: Zap },
-  { key: "analytics",  label: "Thống kê",    icon: BarChart3 },
 ];
+
+// Nhãn tiếng Việt cho event PostHog (src/lib/analytics.ts)
+const EVENT_LABELS: Record<string, string> = {
+  sign_up: "Đăng ký",
+  login_google_succeeded: "Đăng nhập Google",
+  generate_started: "Bắt đầu tạo plan",
+  generate_succeeded: "Tạo plan thành công",
+  generate_failed: "Tạo plan lỗi",
+  trip_saved: "Lưu chuyến đi",
+  booking_click: "Click đặt chỗ",
+  publish: "Công khai trip",
+  purchase_started: "Bắt đầu mua",
+  purchase_succeeded: "Mua thành công",
+  purchase_failed: "Mua thất bại",
+  $pageview: "Lượt xem trang",
+};
+
+const FUNNEL_COLORS = ["#f97316", "#fb923c", "#22c55e", "#06b6d4", "#3b82f6", "#8b5cf6", "#ec4899", "#10b981"];
 
 const AdminUsers = () => {
   const navigate = useNavigate();
@@ -69,9 +91,14 @@ const AdminUsers = () => {
   const [aiLoading, setAiLoading] = useState(false);
   const [chartLoading, setChartLoading] = useState(false);
   const [chartData, setChartData] = useState<{ date: string; registrations: number; trips: number }[]>([]);
+  const [phPageviews, setPhPageviews] = useState<{ day: string; count: number }[]>([]);
+  const [phEvents, setPhEvents] = useState<{ label: string; count: number }[]>([]);
+  const [phFunnel, setPhFunnel] = useState<{ name: string; value: number; fill: string }[]>([]);
+  const [phLoading, setPhLoading] = useState(false);
   const [searchUser, setSearchUser] = useState("");
   const [searchTrip, setSearchTrip] = useState("");
-  const [activeTab, setActiveTab] = useState<AdminTab>("overview");
+  const [activeTab, setActiveTab] = useState<AdminTab>("analytics");
+  const { data: pendingReports = 0 } = useReportsPendingCount(ctxIsAdmin);
   const [editingUser, setEditingUser] = useState<AdminUserSummary | null>(null);
   const [editCredits, setEditCredits] = useState("");
   const [confirmDeactivate, setConfirmDeactivate] = useState<AdminUserSummary | null>(null);
@@ -95,6 +122,8 @@ const AdminUsers = () => {
     if (!authLoading && user && ctxIsAdmin) {
       fetchDashboard();
       fetchUsers();
+      fetchChartData();
+      fetchPostHog();
     } else if (!authLoading && user && !ctxIsAdmin) {
       setLoading(false);
     }
@@ -171,6 +200,29 @@ const AdminUsers = () => {
     setChartLoading(false);
   };
 
+  const fetchPostHog = async () => {
+    setPhLoading(true);
+    try {
+      const [pv, events, funnel] = await Promise.all([
+        adminApi.getAnalyticsPageviews(14),
+        adminApi.getAnalyticsEvents(30),
+        adminApi.getAnalyticsFunnel(30),
+      ]);
+      setPhPageviews(pv.map((r) => ({ day: r.date.slice(5), count: r.count })));
+      setPhEvents(events.map((e) => ({ label: EVENT_LABELS[e.event] || e.event, count: e.count })));
+      setPhFunnel(
+        funnel.map((f, i) => ({
+          name: EVENT_LABELS[f.event] || f.event,
+          value: f.count,
+          fill: FUNNEL_COLORS[i % FUNNEL_COLORS.length],
+        }))
+      );
+    } catch (err) {
+      console.error("Failed to fetch PostHog analytics:", err);
+    }
+    setPhLoading(false);
+  };
+
   const handleGrantCredits = async (userId: number) => {
     const amount = parseInt(editCredits);
     if (isNaN(amount) || amount <= 0) {
@@ -224,7 +276,7 @@ const AdminUsers = () => {
   const handleTabChange = (tab: AdminTab) => {
     setActiveTab(tab);
     if (tab === "trips") fetchTrips();
-    if (tab === "analytics") { fetchChartData(); fetchDashboard(); }
+    if (tab === "analytics") { fetchChartData(); fetchDashboard(); fetchPostHog(); }
     if (tab === "ai-usage") fetchAiUsage();
   };
 
@@ -311,8 +363,15 @@ const AdminUsers = () => {
                   : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
               }`}
             >
-              <item.icon className="w-4 h-4 shrink-0" />
-              {item.label}
+              <span className="flex items-center gap-3">
+                <item.icon className="w-4 h-4 shrink-0" />
+                {item.label}
+              </span>
+              {item.key === "moderation" && pendingReports > 0 && (
+                <span className="ml-auto min-w-[20px] h-5 px-1 rounded-full bg-destructive text-destructive-foreground text-[11px] font-bold flex items-center justify-center">
+                  {pendingReports > 99 ? "99+" : pendingReports}
+                </span>
+              )}
             </button>
           ))}
           <AdminChatNavLink />
@@ -764,17 +823,26 @@ const AdminUsers = () => {
               )
             )}
 
+            {/* ── MODERATION TAB ── */}
+            {activeTab === "moderation" && <AdminReports />}
+
             {/* ── ANALYTICS TAB ── */}
             {activeTab === "analytics" && (
               <>
                 {/* Dashboard stat cards */}
                 {dashboard && (
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
+                  <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4 mb-6">
                     {[
                       { label: "Tổng người dùng", value: dashboard.totalUsers.toLocaleString(), icon: Users, color: "text-primary" },
                       { label: "Tổng chuyến đi", value: dashboard.totalTrips.toLocaleString(), icon: Plane, color: "text-green-500" },
                       { label: "AI calls tháng này", value: dashboard.aiCallsThisMonth.toLocaleString(), icon: BrainCircuit, color: "text-blue-500" },
                       { label: "Chi phí AI (USD)", value: `$${Number(dashboard.aiCostUsdThisMonth).toFixed(2)}`, icon: DollarSign, color: "text-purple-500" },
+                      { label: "Trip public", value: (dashboard.publishedTrips ?? 0).toLocaleString(), icon: Globe, color: "text-cyan-500" },
+                      { label: "Likes", value: (dashboard.totalLikes ?? 0).toLocaleString(), icon: Heart, color: "text-rose-500" },
+                      { label: "Comments", value: (dashboard.totalComments ?? 0).toLocaleString(), icon: MessageCircle, color: "text-amber-500" },
+                      { label: "Reviews", value: (dashboard.totalReviews ?? 0).toLocaleString(), icon: Star, color: "text-yellow-500" },
+                      { label: "Orders", value: (dashboard.totalOrders ?? 0).toLocaleString(), icon: ShoppingCart, color: "text-indigo-500" },
+                      { label: "Doanh thu VND", value: `${Number(dashboard.revenueVndThisMonth ?? 0).toLocaleString("vi-VN")} VND`, icon: CreditCard, color: "text-emerald-500" },
                     ].map((stat, i) => (
                       <motion.div
                         key={stat.label}
@@ -813,6 +881,91 @@ const AdminUsers = () => {
                 ) : (
                   <div className="text-center py-20 text-muted-foreground">Không có dữ liệu thống kê</div>
                 )}
+
+                {/* ── PostHog: Funnel chuyển đổi ── */}
+                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="bg-card rounded-2xl border border-border shadow-sm p-6 mt-6">
+                  <div className="flex items-center gap-2 mb-1">
+                    <BarChart3 className="w-5 h-5 text-primary" />
+                    <h3 className="text-lg font-semibold text-foreground">Funnel chuyển đổi (30 ngày)</h3>
+                  </div>
+                  <p className="text-sm text-muted-foreground mb-6">Số người dùng đạt mỗi bước — nguồn PostHog</p>
+                  {phLoading ? (
+                    <div className="flex items-center justify-center py-16"><Loader2 className="w-6 h-6 animate-spin text-primary" /></div>
+                  ) : phFunnel.some((f) => f.value > 0) ? (
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-center">
+                      <ResponsiveContainer width="100%" height={320}>
+                        <FunnelChart>
+                          <Tooltip contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 12, fontSize: 13 }} />
+                          <Funnel dataKey="value" data={phFunnel} isAnimationActive>
+                            <LabelList position="right" fill="hsl(var(--foreground))" stroke="none" dataKey="name" className="text-[11px]" />
+                            <LabelList position="left" fill="hsl(var(--muted-foreground))" stroke="none" dataKey="value" />
+                          </Funnel>
+                        </FunnelChart>
+                      </ResponsiveContainer>
+                      <div className="space-y-2">
+                        {phFunnel.map((f, i) => {
+                          const base = phFunnel[0].value || 1;
+                          const pct = Math.round((f.value / base) * 100);
+                          return (
+                            <div key={f.name} className="flex items-center gap-3">
+                              <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: f.fill }} />
+                              <span className="text-sm text-foreground flex-1">{i + 1}. {f.name}</span>
+                              <span className="text-sm font-semibold text-foreground">{f.value.toLocaleString()}</span>
+                              <span className="text-xs text-muted-foreground w-12 text-right">{pct}%</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="text-center py-12 text-muted-foreground text-sm">
+                      Chưa có dữ liệu funnel — kiểm tra backend đã cấu hình POSTHOG_PERSONAL_KEY (phx_…) và có event.
+                    </div>
+                  )}
+                </motion.div>
+
+                {/* ── PostHog: Pageviews + Events ── */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
+                  <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="bg-card rounded-2xl border border-border shadow-sm p-6">
+                    <h3 className="text-base font-semibold text-foreground mb-1">Lượt xem trang (14 ngày)</h3>
+                    <p className="text-sm text-muted-foreground mb-6">$pageview theo ngày — PostHog</p>
+                    {phLoading ? (
+                      <div className="flex items-center justify-center py-16"><Loader2 className="w-6 h-6 animate-spin text-primary" /></div>
+                    ) : phPageviews.length > 0 ? (
+                      <ResponsiveContainer width="100%" height={260}>
+                        <LineChart data={phPageviews}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                          <XAxis dataKey="day" tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" />
+                          <YAxis tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" allowDecimals={false} />
+                          <Tooltip contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 12, fontSize: 13 }} />
+                          <Line type="monotone" dataKey="count" name="Lượt xem" stroke="hsl(var(--primary))" strokeWidth={2} dot={false} />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    ) : (
+                      <div className="text-center py-16 text-muted-foreground text-sm">Chưa có dữ liệu</div>
+                    )}
+                  </motion.div>
+
+                  <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="bg-card rounded-2xl border border-border shadow-sm p-6">
+                    <h3 className="text-base font-semibold text-foreground mb-1">Sự kiện theo loại (30 ngày)</h3>
+                    <p className="text-sm text-muted-foreground mb-6">Tổng số lần phát sinh mỗi event — PostHog</p>
+                    {phLoading ? (
+                      <div className="flex items-center justify-center py-16"><Loader2 className="w-6 h-6 animate-spin text-primary" /></div>
+                    ) : phEvents.length > 0 ? (
+                      <ResponsiveContainer width="100%" height={260}>
+                        <BarChart data={phEvents} layout="vertical" margin={{ left: 30 }}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                          <XAxis type="number" tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" allowDecimals={false} />
+                          <YAxis type="category" dataKey="label" tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" width={120} />
+                          <Tooltip contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 12, fontSize: 13 }} />
+                          <Bar dataKey="count" name="Số lần" fill="hsl(var(--primary))" radius={[0, 4, 4, 0]} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    ) : (
+                      <div className="text-center py-16 text-muted-foreground text-sm">Chưa có dữ liệu</div>
+                    )}
+                  </motion.div>
+                </div>
               </>
             )}
 
