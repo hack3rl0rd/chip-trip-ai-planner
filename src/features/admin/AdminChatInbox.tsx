@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { ArrowLeft, Check, Image as ImageIcon, Loader2, LogOut, MessageCircle, Send, Shield, X } from "lucide-react";
+import { ArrowLeft, Check, Image as ImageIcon, Loader2, LogOut, Menu, MessageCircle, Send, Shield, X } from "lucide-react";
+import "./admin-theme.css";
 import { toast } from "sonner";
 import { useAuth } from "@/features/auth/useAuth";
 import {
@@ -20,6 +21,7 @@ const AdminChatInbox = () => {
   const navigate = useNavigate();
   const { user, isAdmin, loading: authLoading, signOut } = useAuth();
   const [statusFilter, setStatusFilter] = useState<"OPEN" | "CLOSED">("OPEN");
+  const [navOpen, setNavOpen] = useState(false);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [draft, setDraft] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -141,23 +143,29 @@ const AdminChatInbox = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background flex">
+    <div className="admin-shell flex">
+      {navOpen && (
+        <div className="fixed inset-0 z-30 bg-black/50 backdrop-blur-sm lg:hidden" onClick={() => setNavOpen(false)} aria-hidden />
+      )}
       {/* Sidebar */}
-      <aside className="w-60 shrink-0 bg-card border-r border-border flex flex-col fixed inset-y-0 left-0 z-30">
-        <div className="h-16 flex items-center px-5 border-b border-border">
-          <Link to="/admin/users" className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground">
+      <aside className={`admin-aside w-64 shrink-0 flex flex-col fixed inset-y-0 left-0 z-40 transition-transform duration-300 lg:translate-x-0 ${navOpen ? "translate-x-0" : "-translate-x-full"}`}>
+        <div className="h-16 flex items-center justify-between px-5 border-b border-border/70">
+          <Link to="/admin/users" className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors">
             <ArrowLeft className="w-4 h-4" />
             Quay lại Admin
           </Link>
+          <button onClick={() => setNavOpen(false)} className="lg:hidden text-muted-foreground hover:text-foreground" aria-label="Đóng menu">
+            <X className="w-5 h-5" />
+          </button>
         </div>
-        <div className="px-5 py-2.5 border-b border-border bg-primary/5">
+        <div className="px-5 py-3 border-b border-border/70">
           <div className="flex items-center gap-2">
-            <Shield className="w-3.5 h-3.5 text-primary" />
-            <span className="text-xs font-semibold text-primary uppercase tracking-wider">Quản trị viên</span>
+            <Shield className="w-3.5 h-3.5 text-chip-orange" />
+            <span className="admin-eyebrow !text-chip-orange">Control Room</span>
           </div>
         </div>
-        <nav className="flex-1 px-3 py-3 space-y-0.5">
-          <div className="w-full flex items-center justify-between gap-3 px-3 py-2.5 rounded-xl text-sm font-medium bg-primary/10 text-primary">
+        <nav className="flex-1 px-4 py-4 space-y-1">
+          <div className="admin-nav-item" data-active="true">
             <span className="flex items-center gap-3">
               <MessageCircle className="w-4 h-4" />
               Tin nhắn
@@ -169,7 +177,7 @@ const AdminChatInbox = () => {
             )}
           </div>
         </nav>
-        <div className="p-3 border-t border-border">
+        <div className="p-4 border-t border-border/70">
           <button
             onClick={() => signOut()}
             className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-destructive hover:bg-destructive/10 transition-colors"
@@ -181,22 +189,30 @@ const AdminChatInbox = () => {
       </aside>
 
       {/* Main content */}
-      <div className="flex-1 ml-60 flex flex-col min-h-screen">
-        <header className="h-16 bg-card border-b border-border flex items-center justify-between px-6 sticky top-0 z-20">
-          <div className="flex items-center gap-2">
-            <MessageCircle className="w-5 h-5 text-primary" />
-            <h1 className="text-base font-semibold">Hỗ trợ khách hàng</h1>
+      <div className="flex-1 lg:ml-64 flex flex-col min-h-screen">
+        <header className="h-16 bg-card/70 backdrop-blur-xl border-b border-border/70 flex items-center justify-between px-4 sm:px-6 sticky top-0 z-20">
+          <div className="flex items-center gap-3">
+            <button onClick={() => setNavOpen(true)} className="lg:hidden w-9 h-9 rounded-xl flex items-center justify-center text-muted-foreground hover:bg-muted transition-colors" aria-label="Mở menu">
+              <Menu className="w-5 h-5" />
+            </button>
+            <div className="flex items-center gap-2.5">
+              <span className="admin-icon-chip !w-9 !h-9 !rounded-xl" data-tone="ember"><MessageCircle className="w-4 h-4" /></span>
+              <div className="leading-tight">
+                <p className="admin-eyebrow !text-[0.58rem]">Quản trị</p>
+                <h1 className="admin-title text-base text-foreground">Hỗ trợ khách hàng</h1>
+              </div>
+            </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 p-1 rounded-full bg-muted/60 border border-border/60">
             <button
               onClick={() => setStatusFilter("OPEN")}
-              className={`px-3 py-1.5 text-xs rounded-lg ${statusFilter === "OPEN" ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}
+              className={`px-3 py-1.5 text-xs font-medium rounded-full transition-colors ${statusFilter === "OPEN" ? "bg-chip-orange text-white shadow-warm" : "text-muted-foreground hover:text-foreground"}`}
             >
               Đang mở
             </button>
             <button
               onClick={() => setStatusFilter("CLOSED")}
-              className={`px-3 py-1.5 text-xs rounded-lg ${statusFilter === "CLOSED" ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}
+              className={`px-3 py-1.5 text-xs font-medium rounded-full transition-colors ${statusFilter === "CLOSED" ? "bg-chip-orange text-white shadow-warm" : "text-muted-foreground hover:text-foreground"}`}
             >
               Đã đóng
             </button>
@@ -205,7 +221,7 @@ const AdminChatInbox = () => {
 
         <div className="flex-1 flex">
           {/* Conversations list */}
-          <div className="w-80 shrink-0 border-r border-border overflow-y-auto bg-card">
+          <div className="w-72 sm:w-80 shrink-0 border-r border-border/70 overflow-y-auto bg-card/40 admin-scroll">
             {convLoading && (
               <p className="text-center text-sm text-muted-foreground py-6">Đang tải…</p>
             )}
@@ -230,13 +246,13 @@ const AdminChatInbox = () => {
               </div>
             ) : (
               <>
-                <div className="h-14 border-b border-border flex items-center justify-between px-4">
+                <div className="h-14 border-b border-border/70 flex items-center justify-between px-4 bg-card/40">
                   <div>
                     {(() => {
                       const c = conversations.find((x) => x.id === selectedId);
                       return c ? (
                         <>
-                          <p className="text-sm font-semibold">{c.userName}</p>
+                          <p className="admin-title text-sm text-foreground">{c.userName}</p>
                           <p className="text-xs text-muted-foreground">{c.userEmail}</p>
                         </>
                       ) : (

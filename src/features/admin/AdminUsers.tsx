@@ -5,12 +5,13 @@ import {
   Users, MapPin, Shield, ArrowLeft, Loader2,
   Trash2, BarChart3, Plane, Search, Eye,
   DollarSign, BrainCircuit, CreditCard, Zap,
-  UserX, UserCheck, LogOut, Moon, Sun, MessageCircle, ShieldAlert,
+  UserX, UserCheck, LogOut, Moon, Sun, MessageCircle, ShieldAlert, Menu, X,
   Heart, Star, ShoppingCart, Globe,
 } from "lucide-react";
 import { useAdminConversations } from "@/features/chat/useAdminChat";
 import AdminReports from "@/features/admin/AdminReports";
 import { useReportsPendingCount } from "@/features/moderation/useModeration";
+import "./admin-theme.css";
 
 function AdminChatNavLink() {
   const { data: conversations = [] } = useAdminConversations("OPEN");
@@ -88,6 +89,7 @@ const AdminUsers = () => {
   const [aiSummary, setAiSummary] = useState<AdminAiCostByProviderMonth[]>([]);
   const [dashboard, setDashboard] = useState<AdminDashboard | null>(null);
   const [loading, setLoading] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [tripsLoading, setTripsLoading] = useState(false);
   const [aiLoading, setAiLoading] = useState(false);
   const [chartLoading, setChartLoading] = useState(false);
@@ -317,54 +319,58 @@ const AdminUsers = () => {
   const currentNav = NAV_ITEMS.find((n) => n.key === activeTab)!;
 
   return (
-    <div className="min-h-screen bg-background flex">
+    <div className="admin-shell flex">
+      {/* mobile overlay */}
+      {sidebarOpen && (
+        <div className="fixed inset-0 z-30 bg-black/50 backdrop-blur-sm lg:hidden" onClick={() => setSidebarOpen(false)} aria-hidden />
+      )}
       {/* ── Left sidebar ── */}
-      <aside className="w-60 shrink-0 bg-card border-r border-border flex flex-col fixed inset-y-0 left-0 z-30">
+      <aside className={`admin-aside w-64 shrink-0 flex flex-col fixed inset-y-0 left-0 z-40 transition-transform duration-300 lg:translate-x-0 ${sidebarOpen ? "translate-x-0" : "-translate-x-full"}`}>
         {/* Logo */}
-        <div className="h-16 flex items-center px-5 border-b border-border">
-          <Link to="/" className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-xl bg-gradient-accent flex items-center justify-center">
+        <div className="h-16 flex items-center justify-between px-5 border-b border-border/70">
+          <Link to="/" className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-xl bg-gradient-accent flex items-center justify-center shadow-warm">
               <MapPin className="w-4 h-4 text-accent-foreground" />
             </div>
-            <span className="font-display text-lg font-bold text-foreground">
-              Chip<span className="text-gradient">Trip</span>
+            <span className="admin-title text-lg text-foreground">
+              Chip<span className="admin-gradient-text">Trip</span>
             </span>
           </Link>
+          <button onClick={() => setSidebarOpen(false)} className="lg:hidden text-muted-foreground hover:text-foreground" aria-label="Đóng menu">
+            <X className="w-5 h-5" />
+          </button>
         </div>
 
         {/* Admin badge */}
-        <div className="px-5 py-2.5 border-b border-border bg-primary/5">
+        <div className="px-5 py-3 border-b border-border/70">
           <div className="flex items-center gap-2">
-            <Shield className="w-3.5 h-3.5 text-primary" />
-            <span className="text-xs font-semibold text-primary uppercase tracking-wider">Quản trị viên</span>
+            <Shield className="w-3.5 h-3.5 text-chip-orange" />
+            <span className="admin-eyebrow !text-chip-orange">Control Room</span>
           </div>
         </div>
 
         {/* Dashboard stats (mini) */}
         {dashboard && (
-          <div className="px-5 py-3 border-b border-border grid grid-cols-2 gap-2">
-            <div className="bg-muted/50 rounded-xl p-2.5 text-center">
-              <p className="text-lg font-bold text-foreground">{dashboard.totalUsers}</p>
-              <p className="text-[10px] text-muted-foreground">Users</p>
+          <div className="px-5 py-3.5 border-b border-border/70 grid grid-cols-2 gap-2.5">
+            <div className="rounded-xl bg-muted/40 border border-border/50 p-3">
+              <p className="admin-stat-num text-xl text-foreground">{dashboard.totalUsers.toLocaleString()}</p>
+              <p className="admin-eyebrow mt-1 !text-[0.58rem]">Người dùng</p>
             </div>
-            <div className="bg-muted/50 rounded-xl p-2.5 text-center">
-              <p className="text-lg font-bold text-foreground">{dashboard.totalTrips}</p>
-              <p className="text-[10px] text-muted-foreground">Trips</p>
+            <div className="rounded-xl bg-muted/40 border border-border/50 p-3">
+              <p className="admin-stat-num text-xl text-foreground">{dashboard.totalTrips.toLocaleString()}</p>
+              <p className="admin-eyebrow mt-1 !text-[0.58rem]">Chuyến đi</p>
             </div>
           </div>
         )}
 
         {/* Nav */}
-        <nav className="flex-1 px-3 py-3 space-y-0.5 overflow-y-auto">
+        <nav className="flex-1 px-4 py-4 space-y-1 overflow-y-auto admin-scroll">
           {NAV_ITEMS.map((item) => (
             <button
               key={item.key}
-              onClick={() => handleTabChange(item.key)}
-              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors ${
-                activeTab === item.key
-                  ? "bg-primary/10 text-primary"
-                  : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
-              }`}
+              onClick={() => { handleTabChange(item.key); setSidebarOpen(false); }}
+              data-active={activeTab === item.key}
+              className="admin-nav-item"
             >
               <span className="flex items-center gap-3">
                 <item.icon className="w-4 h-4 shrink-0" />
@@ -381,7 +387,7 @@ const AdminUsers = () => {
         </nav>
 
         {/* Footer */}
-        <div className="p-3 border-t border-border space-y-0.5">
+        <div className="p-4 border-t border-border/70 space-y-1">
           <Link
             to="/"
             className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
@@ -400,12 +406,20 @@ const AdminUsers = () => {
       </aside>
 
       {/* ── Main content ── */}
-      <div className="flex-1 ml-60 flex flex-col min-h-screen">
+      <div className="flex-1 lg:ml-64 flex flex-col min-h-screen">
         {/* Top header */}
-        <header className="h-16 bg-card border-b border-border flex items-center justify-between px-6 sticky top-0 z-20">
-          <div className="flex items-center gap-2">
-            <currentNav.icon className="w-5 h-5 text-primary" />
-            <h1 className="text-base font-semibold text-foreground">{currentNav.label}</h1>
+        <header className="h-16 bg-card/70 backdrop-blur-xl border-b border-border/70 flex items-center justify-between px-4 sm:px-6 sticky top-0 z-20">
+          <div className="flex items-center gap-3">
+            <button onClick={() => setSidebarOpen(true)} className="lg:hidden w-9 h-9 rounded-xl flex items-center justify-center text-muted-foreground hover:bg-muted transition-colors" aria-label="Mở menu">
+              <Menu className="w-5 h-5" />
+            </button>
+            <div className="flex items-center gap-2.5">
+              <span className="admin-icon-chip !w-9 !h-9 !rounded-xl" data-tone="ember"><currentNav.icon className="w-4 h-4" /></span>
+              <div className="leading-tight">
+                <p className="admin-eyebrow !text-[0.58rem]">Quản trị</p>
+                <h1 className="admin-title text-base text-foreground">{currentNav.label}</h1>
+              </div>
+            </div>
           </div>
           <div className="flex items-center gap-3">
             <button
@@ -540,7 +554,7 @@ const AdminUsers = () => {
                 {loading ? (
                   <div className="flex items-center justify-center py-20"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>
                 ) : (
-                  <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="bg-card rounded-2xl border border-border shadow-sm overflow-hidden">
+                  <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="admin-card overflow-hidden">
                     <Table>
                       <TableHeader>
                         <TableRow>
@@ -727,7 +741,7 @@ const AdminUsers = () => {
                 {tripsLoading ? (
                   <div className="flex items-center justify-center py-20"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>
                 ) : (
-                  <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="bg-card rounded-2xl border border-border shadow-sm overflow-hidden">
+                  <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="admin-card overflow-hidden">
                     <Table>
                       <TableHeader>
                         <TableRow>
@@ -835,7 +849,7 @@ const AdminUsers = () => {
               ) : (
                 <div className="space-y-6">
                   {aiSummary.length > 0 && (
-                    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="bg-card rounded-2xl border border-border shadow-sm p-6">
+                    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="admin-card p-6">
                       <h3 className="text-lg font-semibold text-foreground mb-1">Chi phí theo provider (90 ngày)</h3>
                       <p className="text-sm text-muted-foreground mb-6">Tổng hợp theo provider và tháng</p>
                       <ResponsiveContainer width="100%" height={220}>
@@ -862,7 +876,7 @@ const AdminUsers = () => {
                       </div>
                     </motion.div>
                   )}
-                  <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="bg-card rounded-2xl border border-border shadow-sm overflow-hidden">
+                  <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="admin-card overflow-hidden">
                     <div className="px-5 py-4 border-b border-border">
                       <h3 className="font-semibold text-foreground">Log gần nhất (50 entries)</h3>
                     </div>
@@ -921,27 +935,29 @@ const AdminUsers = () => {
                 {dashboard && (
                   <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4 mb-6">
                     {[
-                      { label: "Tổng người dùng", value: dashboard.totalUsers.toLocaleString(), icon: Users, color: "text-primary" },
-                      { label: "Tổng chuyến đi", value: dashboard.totalTrips.toLocaleString(), icon: Plane, color: "text-green-500" },
-                      { label: "AI calls tháng này", value: dashboard.aiCallsThisMonth.toLocaleString(), icon: BrainCircuit, color: "text-blue-500" },
-                      { label: "Chi phí AI (USD)", value: `$${Number(dashboard.aiCostUsdThisMonth).toFixed(2)}`, icon: DollarSign, color: "text-purple-500" },
-                      { label: "Trip public", value: (dashboard.publishedTrips ?? 0).toLocaleString(), icon: Globe, color: "text-cyan-500" },
-                      { label: "Likes", value: (dashboard.totalLikes ?? 0).toLocaleString(), icon: Heart, color: "text-rose-500" },
-                      { label: "Comments", value: (dashboard.totalComments ?? 0).toLocaleString(), icon: MessageCircle, color: "text-amber-500" },
-                      { label: "Reviews", value: (dashboard.totalReviews ?? 0).toLocaleString(), icon: Star, color: "text-yellow-500" },
-                      { label: "Orders", value: (dashboard.totalOrders ?? 0).toLocaleString(), icon: ShoppingCart, color: "text-indigo-500" },
-                      { label: "Doanh thu VND", value: `${Number(dashboard.revenueVndThisMonth ?? 0).toLocaleString("vi-VN")} VND`, icon: CreditCard, color: "text-emerald-500" },
+                      { label: "Tổng người dùng", value: dashboard.totalUsers.toLocaleString(), icon: Users, tone: "ember" },
+                      { label: "Tổng chuyến đi", value: dashboard.totalTrips.toLocaleString(), icon: Plane, tone: "ember" },
+                      { label: "AI calls tháng này", value: dashboard.aiCallsThisMonth.toLocaleString(), icon: BrainCircuit, tone: "ember" },
+                      { label: "Chi phí AI (USD)", value: `$${Number(dashboard.aiCostUsdThisMonth).toFixed(2)}`, icon: DollarSign, tone: "gold" },
+                      { label: "Trip public", value: (dashboard.publishedTrips ?? 0).toLocaleString(), icon: Globe, tone: "neutral" },
+                      { label: "Likes", value: (dashboard.totalLikes ?? 0).toLocaleString(), icon: Heart, tone: "neutral" },
+                      { label: "Comments", value: (dashboard.totalComments ?? 0).toLocaleString(), icon: MessageCircle, tone: "neutral" },
+                      { label: "Reviews", value: (dashboard.totalReviews ?? 0).toLocaleString(), icon: Star, tone: "neutral" },
+                      { label: "Orders", value: (dashboard.totalOrders ?? 0).toLocaleString(), icon: ShoppingCart, tone: "gold" },
+                      { label: "Doanh thu VND", value: `${Number(dashboard.revenueVndThisMonth ?? 0).toLocaleString("vi-VN")} VND`, icon: CreditCard, tone: "gold" },
                     ].map((stat, i) => (
                       <motion.div
                         key={stat.label}
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: i * 0.08 }}
-                        className="bg-card rounded-2xl border border-border p-5 shadow-sm"
+                        transition={{ delay: Math.min(i * 0.05, 0.4), ease: [0.22, 1, 0.36, 1] }}
+                        className="admin-card admin-card-hover admin-card-keyline p-5"
                       >
-                        <stat.icon className={`w-5 h-5 ${stat.color} mb-2`} />
-                        <p className="text-3xl font-bold text-foreground">{stat.value}</p>
-                        <p className="text-xs text-muted-foreground mt-1">{stat.label}</p>
+                        <span className="admin-icon-chip mb-3" data-tone={stat.tone === "neutral" ? undefined : stat.tone}>
+                          <stat.icon className="w-5 h-5" />
+                        </span>
+                        <p className="admin-stat-num text-3xl text-foreground">{stat.value}</p>
+                        <p className="admin-eyebrow mt-2 !text-[0.6rem]">{stat.label}</p>
                       </motion.div>
                     ))}
                   </div>
@@ -949,7 +965,7 @@ const AdminUsers = () => {
                 {chartLoading ? (
                   <div className="flex items-center justify-center py-20"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>
                 ) : chartData.length > 0 ? (
-                  <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="bg-card rounded-2xl border border-border shadow-sm p-6">
+                  <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="admin-card p-6">
                     <h3 className="text-lg font-semibold text-foreground mb-1">Đăng ký & Chuyến đi (30 ngày)</h3>
                     <p className="text-sm text-muted-foreground mb-6">Xu hướng hoạt động trong 30 ngày gần nhất</p>
                     <ResponsiveContainer width="100%" height={300}>
@@ -971,7 +987,7 @@ const AdminUsers = () => {
                 )}
 
                 {/* ── PostHog: Funnel chuyển đổi ── */}
-                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="bg-card rounded-2xl border border-border shadow-sm p-6 mt-6">
+                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="admin-card p-6 mt-6">
                   <div className="flex items-center gap-2 mb-1">
                     <BarChart3 className="w-5 h-5 text-primary" />
                     <h3 className="text-lg font-semibold text-foreground">Funnel chuyển đổi (30 ngày)</h3>
@@ -1014,7 +1030,7 @@ const AdminUsers = () => {
 
                 {/* ── PostHog: Pageviews + Events ── */}
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
-                  <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="bg-card rounded-2xl border border-border shadow-sm p-6">
+                  <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="admin-card p-6">
                     <h3 className="text-base font-semibold text-foreground mb-1">Lượt xem trang (14 ngày)</h3>
                     <p className="text-sm text-muted-foreground mb-6">$pageview theo ngày — PostHog</p>
                     {phLoading ? (
@@ -1034,7 +1050,7 @@ const AdminUsers = () => {
                     )}
                   </motion.div>
 
-                  <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="bg-card rounded-2xl border border-border shadow-sm p-6">
+                  <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="admin-card p-6">
                     <h3 className="text-base font-semibold text-foreground mb-1">Sự kiện theo loại (30 ngày)</h3>
                     <p className="text-sm text-muted-foreground mb-6">Tổng số lần phát sinh mỗi event — PostHog</p>
                     {phLoading ? (

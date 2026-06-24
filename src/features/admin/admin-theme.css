@@ -1,0 +1,188 @@
+/* ───────────────────────────────────────────────────────────────
+   Chip Trip · Admin — "Warm Editorial Control Room"
+   A committed dark-luxury direction layered on the Chip Trip brand:
+   warm charcoal canvas, ember→gold accent used with restraint,
+   editorial tabular numerals, whisper-quiet motion.
+   All rules are scoped under .admin-shell so nothing leaks to the
+   public app.
+   ─────────────────────────────────────────────────────────────── */
+
+/* ── Canvas ──────────────────────────────────────────────────── */
+.admin-shell {
+  min-height: 100vh;
+  background-color: hsl(var(--background));
+  background-image:
+    radial-gradient(120% 90% at 88% -10%, hsl(var(--chip-orange) / 0.10), transparent 55%),
+    radial-gradient(90% 70% at 0% 0%, hsl(var(--chip-yellow) / 0.06), transparent 50%);
+  background-attachment: fixed;
+}
+
+/* Hairline so the sidebar reads as a separate plane */
+.admin-aside {
+  background: hsl(var(--card) / 0.72);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border-right: 1px solid hsl(var(--border) / 0.7);
+}
+
+/* ── Typography ──────────────────────────────────────────────── */
+.admin-eyebrow {
+  font-family: "Space Grotesk", sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  font-weight: 600;
+  font-size: 0.66rem;
+  color: hsl(var(--muted-foreground));
+}
+
+.admin-title {
+  font-family: "Space Grotesk", sans-serif;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.05;
+}
+
+/* Editorial number treatment for stats */
+.admin-stat-num {
+  font-family: "Space Grotesk", sans-serif;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+  line-height: 1;
+}
+
+.admin-gradient-text {
+  background-image: linear-gradient(115deg, hsl(var(--chip-orange)), hsl(var(--chip-yellow)));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* ── Surfaces ────────────────────────────────────────────────── */
+.admin-card {
+  position: relative;
+  background: hsl(var(--card));
+  border: 1px solid hsl(var(--border) / 0.8);
+  border-radius: 1.25rem;
+  box-shadow: 0 1px 2px hsl(25 30% 4% / 0.04), 0 12px 36px -18px hsl(25 30% 4% / 0.18);
+  transition: transform 0.25s cubic-bezier(0.22, 1, 0.36, 1),
+              border-color 0.25s ease, box-shadow 0.25s ease;
+}
+
+.admin-card-hover:hover {
+  transform: translateY(-3px);
+  border-color: hsl(var(--chip-orange) / 0.45);
+  box-shadow: 0 1px 2px hsl(25 30% 4% / 0.05), 0 22px 48px -22px hsl(28 100% 54% / 0.28);
+}
+
+/* Top ember keyline that fades in on hover — a quiet premium signal */
+.admin-card-keyline::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 2px;
+  border-radius: 1.25rem 1.25rem 0 0;
+  background: linear-gradient(90deg, transparent, hsl(var(--chip-orange) / 0.8), hsl(var(--chip-yellow) / 0.8), transparent);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+.admin-card-keyline:hover::before { opacity: 1; }
+
+/* ── Icon chips ──────────────────────────────────────────────── */
+.admin-icon-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 0.85rem;
+  background: hsl(var(--muted) / 0.6);
+  color: hsl(var(--muted-foreground));
+  border: 1px solid hsl(var(--border) / 0.6);
+}
+.admin-icon-chip[data-tone="ember"] {
+  background: hsl(var(--chip-orange) / 0.12);
+  color: hsl(var(--chip-orange));
+  border-color: hsl(var(--chip-orange) / 0.22);
+}
+.admin-icon-chip[data-tone="gold"] {
+  background: hsl(var(--chip-yellow) / 0.14);
+  color: hsl(38 92% 50%);
+  border-color: hsl(var(--chip-yellow) / 0.28);
+}
+
+/* ── Sidebar nav ─────────────────────────────────────────────── */
+.admin-nav-item {
+  position: relative;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.6rem 0.8rem;
+  border-radius: 0.85rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: hsl(var(--muted-foreground));
+  transition: color 0.18s ease, background 0.18s ease;
+  cursor: pointer;
+}
+.admin-nav-item:hover {
+  color: hsl(var(--foreground));
+  background: hsl(var(--muted) / 0.5);
+}
+.admin-nav-item[data-active="true"] {
+  color: hsl(var(--chip-orange));
+  background: hsl(var(--chip-orange) / 0.10);
+}
+/* Ember indicator bar */
+.admin-nav-item[data-active="true"]::before {
+  content: "";
+  position: absolute;
+  left: -0.75rem;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 1.15rem;
+  border-radius: 999px;
+  background: linear-gradient(hsl(var(--chip-orange)), hsl(var(--chip-yellow)));
+}
+
+/* ── Focus & a11y ────────────────────────────────────────────── */
+.admin-shell :focus-visible {
+  outline: 2px solid hsl(var(--chip-orange) / 0.8);
+  outline-offset: 2px;
+  border-radius: 0.4rem;
+}
+
+/* ── Custom scrollbar inside admin ───────────────────────────── */
+.admin-scroll::-webkit-scrollbar { width: 8px; height: 8px; }
+.admin-scroll::-webkit-scrollbar-track { background: transparent; }
+.admin-scroll::-webkit-scrollbar-thumb {
+  background: hsl(var(--border));
+  border-radius: 999px;
+}
+.admin-scroll::-webkit-scrollbar-thumb:hover { background: hsl(var(--chip-orange) / 0.5); }
+
+/* ── Status dot ──────────────────────────────────────────────── */
+.admin-dot {
+  width: 0.5rem; height: 0.5rem; border-radius: 999px; display: inline-block;
+}
+.admin-dot[data-state="on"] {
+  background: hsl(142 70% 45%);
+  box-shadow: 0 0 0 3px hsl(142 70% 45% / 0.18);
+}
+.admin-dot[data-state="off"] {
+  background: hsl(var(--muted-foreground) / 0.6);
+}
+
+/* ── Motion: whisper-quiet, and respectful ───────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  .admin-shell *,
+  .admin-card,
+  .admin-card-hover:hover {
+    transition: none !important;
+    animation: none !important;
+    transform: none !important;
+  }
+}

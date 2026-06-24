@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { format } from "date-fns";
 import { vi } from "date-fns/locale";
 import { toast } from "sonner";
+import "./admin-theme.css";
 
 const fmtVnd = (v: number | null | undefined) =>
   `${Number(v ?? 0).toLocaleString("vi-VN")} ₫`;
@@ -48,7 +49,7 @@ const AdminUserDetail = () => {
 
   if (authLoading) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
+      <div className="admin-shell flex items-center justify-center">
         <Loader2 className="w-8 h-8 animate-spin text-primary" />
       </div>
     );
@@ -56,7 +57,7 @@ const AdminUserDetail = () => {
 
   if (!isAdmin) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center px-4">
+      <div className="admin-shell flex items-center justify-center px-4">
         <div className="text-center">
           <Shield className="w-16 h-16 text-destructive mx-auto mb-4" />
           <h1 className="text-2xl font-bold text-foreground mb-2">Không có quyền truy cập</h1>
@@ -70,9 +71,9 @@ const AdminUserDetail = () => {
   const premium = data?.payment?.premium ?? false;
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="admin-shell">
       {/* Top bar */}
-      <header className="h-16 bg-card border-b border-border flex items-center justify-between px-4 sm:px-6 sticky top-0 z-20">
+      <header className="h-16 bg-card/70 backdrop-blur-xl border-b border-border flex items-center justify-between px-4 sm:px-6 sticky top-0 z-20">
         <Link
           to="/admin/users"
           className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
@@ -80,7 +81,7 @@ const AdminUserDetail = () => {
           <ArrowLeft className="w-4 h-4" />
           Danh sách người dùng
         </Link>
-        <span className="text-base font-semibold text-foreground">Chi tiết người dùng</span>
+        <span className="admin-title text-base text-foreground">Chi tiết người dùng</span>
       </header>
 
       <main className="max-w-5xl mx-auto p-4 sm:p-6">
@@ -93,7 +94,7 @@ const AdminUserDetail = () => {
         ) : (
           <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
             {/* ── Profile header ── */}
-            <div className="bg-card rounded-2xl border border-border shadow-sm p-6">
+            <div className="admin-card admin-card-keyline p-6">
               <div className="flex items-start gap-4">
                 {data.avatarUrl ? (
                   <img src={data.avatarUrl} alt="" className="w-16 h-16 rounded-2xl object-cover shrink-0" />
@@ -104,7 +105,7 @@ const AdminUserDetail = () => {
                 )}
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <h1 className="text-xl font-bold text-foreground truncate">{data.fullName || "Chưa đặt tên"}</h1>
+                    <h1 className="admin-title text-xl text-foreground truncate">{data.fullName || "Chưa đặt tên"}</h1>
                     {data.role === "ROLE_ADMIN" && (
                       <Badge className="bg-primary/15 text-primary border-0">Admin</Badge>
                     )}
@@ -147,21 +148,21 @@ const AdminUserDetail = () => {
             {/* ── Stat cards ── */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               {[
-                { label: "AI Credits", value: data.aiCredits.toLocaleString("vi-VN"), icon: BrainCircuit, color: "text-blue-500" },
-                { label: "Chuyến đi", value: (data.trips?.length ?? 0).toLocaleString("vi-VN"), icon: Plane, color: "text-green-500" },
-                { label: "Tổng chi tiêu", value: fmtVnd(data.payment?.totalSpentVnd), icon: Wallet, color: "text-emerald-500" },
-                { label: "Đơn đã thanh toán", value: (data.payment?.paidOrderCount ?? 0).toLocaleString("vi-VN"), icon: CreditCard, color: "text-amber-500" },
+                { label: "AI Credits", value: data.aiCredits.toLocaleString("vi-VN"), icon: BrainCircuit, tone: "ember" },
+                { label: "Chuyến đi", value: (data.trips?.length ?? 0).toLocaleString("vi-VN"), icon: Plane, tone: "ember" },
+                { label: "Tổng chi tiêu", value: fmtVnd(data.payment?.totalSpentVnd), icon: Wallet, tone: "gold" },
+                { label: "Đơn đã thanh toán", value: (data.payment?.paidOrderCount ?? 0).toLocaleString("vi-VN"), icon: CreditCard, tone: "gold" },
               ].map((stat) => (
-                <div key={stat.label} className="bg-card rounded-2xl border border-border p-5 shadow-sm">
-                  <stat.icon className={`w-5 h-5 ${stat.color} mb-2`} />
-                  <p className="text-2xl font-bold text-foreground truncate">{stat.value}</p>
-                  <p className="text-xs text-muted-foreground mt-1">{stat.label}</p>
+                <div key={stat.label} className="admin-card admin-card-hover admin-card-keyline p-5">
+                  <span className="admin-icon-chip mb-3" data-tone={stat.tone}><stat.icon className="w-5 h-5" /></span>
+                  <p className="admin-stat-num text-2xl text-foreground truncate">{stat.value}</p>
+                  <p className="admin-eyebrow mt-2 !text-[0.6rem]">{stat.label}</p>
                 </div>
               ))}
             </div>
 
             {/* ── Premium / Payment ── */}
-            <div className="bg-card rounded-2xl border border-border shadow-sm overflow-hidden">
+            <div className="admin-card overflow-hidden">
               <div className="px-5 py-4 border-b border-border flex items-center gap-2">
                 <Crown className="w-4 h-4 text-amber-500" />
                 <h3 className="font-semibold text-foreground">Gói & Thanh toán</h3>
@@ -216,7 +217,7 @@ const AdminUserDetail = () => {
             </div>
 
             {/* ── Trips ── */}
-            <div className="bg-card rounded-2xl border border-border shadow-sm overflow-hidden">
+            <div className="admin-card overflow-hidden">
               <div className="px-5 py-4 border-b border-border flex items-center gap-2">
                 <Plane className="w-4 h-4 text-primary" />
                 <h3 className="font-semibold text-foreground">Chuyến đi ({data.trips?.length ?? 0})</h3>
@@ -261,7 +262,7 @@ const AdminUserDetail = () => {
             </div>
 
             {/* ── AI usage ── */}
-            <div className="bg-card rounded-2xl border border-border shadow-sm p-6">
+            <div className="admin-card admin-card-keyline p-6">
               <div className="flex items-center gap-2 mb-4">
                 <BrainCircuit className="w-4 h-4 text-blue-500" />
                 <h3 className="font-semibold text-foreground">Sử dụng AI</h3>
@@ -274,7 +275,7 @@ const AdminUserDetail = () => {
                   { label: "Chi phí (USD)", value: `$${Number(data.aiUsage?.totalCostUsd ?? 0).toFixed(4)}` },
                 ].map((s) => (
                   <div key={s.label} className="bg-muted/50 rounded-xl p-3">
-                    <p className="text-lg font-bold text-foreground">{s.value}</p>
+                    <p className="admin-stat-num text-lg text-foreground">{s.value}</p>
                     <p className="text-xs text-muted-foreground">{s.label}</p>
                   </div>
                 ))}
