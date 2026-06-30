@@ -88,6 +88,16 @@ export const tripsApi = {
     return data.data;
   },
 
+  /**
+   * Sinh lịch trình BẤT ĐỒNG BỘ: BE trả 202 ngay, việc nặng chạy nền, kết quả đẩy về qua
+   * WebSocket (/user/queue/trip-generation). Chỉ chờ phần validate đồng bộ (402/400/429) ở đây.
+   */
+  generateAsync: async (payload: GenerateTripPayload): Promise<void> => {
+    await apiClient.post<ApiResponse<void>>("/trips/generate-async", payload, {
+      timeout: 30_000,
+    });
+  },
+
   getMyTrips: async (page = 0, size = 20) => {
     const { data } = await apiClient.get<ApiResponse<TripSummary[]>>("/trips", {
       params: { page, size },

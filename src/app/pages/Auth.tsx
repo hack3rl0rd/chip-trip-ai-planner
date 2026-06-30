@@ -1,9 +1,10 @@
 import { useState, useEffect, useRef } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useLocation, useNavigate, Link } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import { MapPin, Mail, Lock, User, Eye, EyeOff, ArrowLeft, Sparkles, KeyRound } from "lucide-react";
 import { toast } from "sonner";
 import { authApi, authStorage } from "@/integrations/api";
@@ -76,6 +77,7 @@ const Auth = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [agreeToTerms, setAgreeToTerms] = useState(false);
   const [countdown, setCountdown] = useState(0);
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -191,6 +193,10 @@ const Auth = () => {
     }
     if (form.password !== form.confirmPassword) {
       toast.error("Mật khẩu xác nhận không khớp");
+      return;
+    }
+    if (!agreeToTerms) {
+      toast.error("Vui lòng đồng ý với Điều khoản sử dụng và Chính sách quyền riêng tư");
       return;
     }
     setLoading(true);
@@ -346,6 +352,7 @@ const Auth = () => {
 
   const resetForm = () => {
     setForm({ name: "", email: "", password: "", confirmPassword: "", otp: "", newPassword: "" });
+    setAgreeToTerms(false);
     setStep("login");
     if (countdownRef.current) clearInterval(countdownRef.current);
     setCountdown(0);
@@ -525,7 +532,21 @@ const Auth = () => {
                       </button>
                     </div>
                   </div>
-                  <Button type="submit" disabled={loading} className="w-full h-12 rounded-xl text-base font-bold" variant="hero">
+                  <div className="flex items-start gap-2.5">
+                    <Checkbox
+                      id="agree-terms"
+                      checked={agreeToTerms}
+                      onCheckedChange={(checked) => setAgreeToTerms(checked === true)}
+                      className="mt-0.5"
+                    />
+                    <Label htmlFor="agree-terms" className="text-sm text-muted-foreground font-normal leading-relaxed cursor-pointer">
+                      Tôi đồng ý với{" "}
+                      <Link to="/terms" target="_blank" rel="noreferrer" className="text-chip-orange hover:underline">Điều khoản sử dụng</Link>{" "}
+                      và{" "}
+                      <Link to="/privacy" target="_blank" rel="noreferrer" className="text-chip-orange hover:underline">Chính sách quyền riêng tư</Link>
+                    </Label>
+                  </div>
+                  <Button type="submit" disabled={loading || !agreeToTerms} className="w-full h-12 rounded-xl text-base font-bold" variant="hero">
                     {loading ? <motion.div animate={{ rotate: 360 }} transition={{ duration: 1, repeat: Infinity, ease: "linear" }} className="w-5 h-5 border-2 border-accent-foreground/30 border-t-accent-foreground rounded-full" /> : "Tạo tài khoản"}
                   </Button>
                 </form>
@@ -664,13 +685,13 @@ const Auth = () => {
             )}
           </AnimatePresence>
 
-          {/* Only show terms for login/register */}
-          {(step === "login" || step === "register") && (
+          {/* Login: lời nhắc điều khoản (bước đăng ký đã có checkbox đồng ý riêng) */}
+          {step === "login" && (
             <p className="text-center text-xs text-muted-foreground mt-8">
               Bằng việc tiếp tục, bạn đồng ý với{" "}
-              <a href="#" className="text-chip-orange hover:underline">Điều khoản</a>{" "}
+              <Link to="/terms" className="text-chip-orange hover:underline">Điều khoản</Link>{" "}
               và{" "}
-              <a href="#" className="text-chip-orange hover:underline">Chính sách bảo mật</a>
+              <Link to="/privacy" className="text-chip-orange hover:underline">Chính sách bảo mật</Link>
             </p>
           )}
         </motion.div>

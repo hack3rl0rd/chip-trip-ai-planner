@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
@@ -10,9 +10,11 @@ import { openUpgrade } from "@/features/premium/upgradeStore";
 import { computeTripDays, exceedsDays, exceedsStyles, generateGateReason } from "@/features/premium/limits";
 import { tripsApi, aiApi, placesApi, type PlaceLookupResult, type PlacePrediction } from "@/integrations/api";
 import { usePlaceAutocomplete } from "@/features/planning/usePlaceAutocomplete";
-import { mapTripDetailToPlan } from "@/lib/trip-mapper";
 import { analyticsError, trackEvent } from "@/lib/analytics";
 import { toast } from "sonner";
+import { connectTripGenerationSocket, type TripGenerationSocketHandle } from "@/integrations/ws/tripGenerationSocket";
+import { authStorage } from "@/integrations/api/client";
+import type { TripGenerationResult } from "@/integrations/api/types";
 
 const timeSlots = [
   { id: "morning", label: "Sáng", time: "6h-10h", emoji: "🌅" },
@@ -86,6 +88,9 @@ const getTodayInputValue = () => {
   return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
 };
 
+/** Phòng khi WS push thất lạc: sau ngần này chưa nhận kết quả thì báo lỗi mềm (trip có thể đã được tạo). */
+const GENERATE_WATCHDOG_MS = 180_000;
+
 const Planning = () => {
   const navigate = useNavigate();
   const { user, loading: authLoading } = useAuth();
@@ -116,6 +121,12 @@ const Planning = () => {
   const [destFocused, setDestFocused] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Async generate: chờ kết quả qua WebSocket thay vì giữ một HTTP request dài.
+  const pendingAnalyticsRef = useRef<Record<string, unknown> | null>(null);
+  const watchdogRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const tripGenSocketRef = useRef<TripGenerationSocketHandle | null>(null);
+  const onGenResultRef = useRef<(r: TripGenerationResult) => void>(() => {});
 
   // Suggest flow state
   const [vibes, setVibes] = useState<string[]>([]);
@@ -278,7 +289,7 @@ const Planning = () => {
     };
     trackEvent("generate_started", analyticsPayload);
     try {
-      const data = await tripsApi.generate({
+      await tripsApi.generateAsync({
         departure: origin,
         destination,
         tripType: "roundtrip",
@@ -291,34 +302,77 @@ const Planning = () => {
         peopleCount: travelers,
         tickets: travelers,
       });
-
-      trackEvent("generate_succeeded", { ...analyticsPayload, tripId: data.id });
-      invalidateEntitlements();   // số lượt vừa bị trừ → cập nhật badge / gate
-      if (data.geocodeFailedCount && data.geocodeFailedCount > 0) {
-        toast.info(`${data.geocodeFailedCount} hoạt động chưa định vị được trên bản đồ`, {
-          description: "Lịch trình vẫn dùng được; một vài hoạt động có thể chưa hiện trên bản đồ.",
-        });
-      }
-      const trip = mapTripDetailToPlan(data);
-      trip.days?.forEach((day) => {
-        day.items?.forEach((item) => {
-          if (!item.image || item.image === "/placeholder.svg") item.image = "/placeholder.svg";
-        });
-      });
-
-      navigate("/result", { state: { trip, tripId: data.id } });
+      // BE đã nhận (202). Kết quả tới qua WebSocket (onGenResultRef). Bật watchdog phòng push thất lạc.
+      pendingAnalyticsRef.current = analyticsPayload;
+      if (watchdogRef.current) clearTimeout(watchdogRef.current);
+      watchdogRef.current = setTimeout(() => {
+        if (!pendingAnalyticsRef.current) return;
+        pendingAnalyticsRef.current = null;
+        watchdogRef.current = null;
+        setIsLoading(false);
+        setError(
+          "AI mất quá nhiều thời gian xử lý. Lịch trình có thể đã được tạo — kiểm tra trong 'Chuyến đi của tôi', hoặc thử lại."
+        );
+      }, GENERATE_WATCHDOG_MS);
     } catch (err: any) {
-      console.error("AI generation failed:", err);
+      // Lỗi validate đồng bộ (hết lượt 402 / dữ liệu 400 / rate limit 429) hoặc lỗi mạng khi gửi yêu cầu.
+      console.error("AI generation request failed:", err);
       trackEvent("generate_failed", { ...analyticsPayload, ...analyticsError(err) });
-      const isTimeout = err.code === "ECONNABORTED" || err.message?.includes("timeout");
-      const msg = isTimeout
-        ? "AI mất quá nhiều thời gian xử lý. Lịch trình có thể đã được tạo — kiểm tra trong 'Chuyến đi của tôi', hoặc thử lại."
-        : err.response?.data?.message || err.message || "Tạo lịch trình thất bại, vui lòng thử lại";
+      const msg = err.response?.data?.message || err.message || "Tạo lịch trình thất bại, vui lòng thử lại";
       setError(msg);
-    } finally {
       setIsLoading(false);
     }
   };
+
+  // Gán mỗi render để luôn dùng navigate/state mới nhất; socket effect chỉ gọi qua ref nên không re-subscribe.
+  onGenResultRef.current = (result: TripGenerationResult) => {
+    const analyticsPayload = pendingAnalyticsRef.current;
+    if (!analyticsPayload) return; // không có job đang đợi → bỏ qua (stale)
+    if (watchdogRef.current) {
+      clearTimeout(watchdogRef.current);
+      watchdogRef.current = null;
+    }
+    pendingAnalyticsRef.current = null;
+    setIsLoading(false);
+    if (result.status === "DONE" && result.tripId != null) {
+      trackEvent("generate_succeeded", { ...analyticsPayload, tripId: result.tripId });
+      invalidateEntitlements();
+      if (result.geocodeFailedCount && result.geocodeFailedCount > 0) {
+        toast.info(`${result.geocodeFailedCount} hoạt động chưa định vị được trên bản đồ`, {
+          description: "Lịch trình vẫn dùng được; một vài hoạt động có thể chưa hiện trên bản đồ.",
+        });
+      }
+      navigate("/result", { state: { tripId: result.tripId } });
+    } else {
+      trackEvent("generate_failed", { ...analyticsPayload, reason: result.error ?? "unknown" });
+      setError(result.error || "Tạo lịch trình thất bại, vui lòng thử lại");
+    }
+  };
+
+  // Kết nối WS nhận kết quả generate khi ở trang Planning; subscribe sẵn để không lỡ push.
+  useEffect(() => {
+    if (!user) return;
+    const connect = () => {
+      const token = authStorage.getAccessToken();
+      if (!token) return;
+      tripGenSocketRef.current?.disconnect();
+      tripGenSocketRef.current = connectTripGenerationSocket(
+        token,
+        (r) => onGenResultRef.current?.(r),
+        { onError: (m) => console.warn("Trip-gen WS error:", m) }
+      );
+    };
+    connect();
+    const onAuthChange = () => connect();
+    window.addEventListener("chiptrip-auth-change", onAuthChange);
+    return () => {
+      window.removeEventListener("chiptrip-auth-change", onAuthChange);
+      tripGenSocketRef.current?.disconnect();
+      tripGenSocketRef.current = null;
+      if (watchdogRef.current) clearTimeout(watchdogRef.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id]);
 
   const canNextKnown = () => {
     if (knownStep === 0) return origin.trim().length > 0 && destination.trim().length > 0 && !getDateValidationMessage();

@@ -235,6 +235,14 @@ export interface TripDetail {
 
 export type TripGenerateResponse = TripDetail;
 
+/** Kết quả sinh lịch trình async đẩy qua WebSocket (/user/queue/trip-generation). */
+export interface TripGenerationResult {
+  status: "DONE" | "FAILED";
+  tripId: number | null;
+  geocodeFailedCount: number | null;
+  error: string | null;
+}
+
 export interface ShareTokenResponse {
   shareToken: string;
 }

@@ -11,7 +11,7 @@ import { paymentsApi } from "@/integrations/api";
 import { userApi } from "@/integrations/api/modules/user";
 import type { PaymentOrder } from "@/integrations/api/types";
 import { queryKeys } from "@/hooks/useApi";
-import { trackEvent } from "@/lib/analytics";
+import { analyticsError, trackEvent } from "@/lib/analytics";
 
 // Map ?plan= (FE) → planCode (BE config keys)
 const PLAN_CODE: Record<string, string> = { premium: "PREMIUM", pro: "PRO" };
@@ -45,11 +45,13 @@ const Checkout = () => {
   const [remaining, setRemaining] = useState<number | null>(null);
   const handledPaid = useRef(false);
   const reportedStatusError = useRef(false);
+  const reportedFailed = useRef(false);
 
   useEffect(() => {
     setPaid(false);
     handledPaid.current = false;
     reportedStatusError.current = false;
+    reportedFailed.current = false;
   }, [user?.id, planCode]);
 
   // Chưa đăng nhập → đẩy sang /auth, quay lại checkout sau khi login
@@ -79,6 +81,17 @@ const Checkout = () => {
       });
     }
   }, [order, planCode]);
+
+  // Tạo đơn thất bại (chưa kịp hiện QR) → ghi nhận để đo rớt ngay đầu phễu thanh toán
+  useEffect(() => {
+    if (!orderQuery.error || reportedFailed.current) return;
+    reportedFailed.current = true;
+    trackEvent("purchase_failed", {
+      planCode,
+      reason: "create_order_failed",
+      ...analyticsError(orderQuery.error),
+    });
+  }, [orderQuery.error, planCode]);
 
   // Poll trạng thái đơn hàng cho tới khi PAID
   const statusQuery = useQuery({
@@ -166,6 +179,19 @@ const Checkout = () => {
   const expired = remaining === 0 && !paid;
   const minutes = remaining != null ? Math.floor(remaining / 60) : 0;
   const seconds = remaining != null ? remaining % 60 : 0;
+
+  // Hết hạn mã QR mà chưa thanh toán → user đã purchase_started nhưng bỏ dở (điểm rớt chính)
+  useEffect(() => {
+    if (!expired || handledPaid.current || reportedFailed.current) return;
+    reportedFailed.current = true;
+    trackEvent("purchase_failed", {
+      planCode,
+      amountVnd: order?.amountVnd,
+      credits: order?.credits,
+      reason: "expired",
+      method: "sepay_qr",
+    });
+  }, [expired, planCode, order?.amountVnd, order?.credits]);
 
   const featureList = useMemo(() => planMeta.features, [planMeta]);
 

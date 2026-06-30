@@ -24,6 +24,8 @@ const Premium = lazy(() => import("@/app/pages/Premium"));
 const Checkout = lazy(() => import("@/app/pages/Checkout"));
 const PaymentSuccess = lazy(() => import("@/app/pages/PaymentSuccess"));
 const Profile = lazy(() => import("@/app/pages/Profile"));
+const Terms = lazy(() => import("@/app/pages/Terms"));
+const Privacy = lazy(() => import("@/app/pages/Privacy"));
 const AdminUsers = lazy(() => import("@/features/admin/AdminUsers"));
 const AdminUserDetail = lazy(() => import("@/features/admin/AdminUserDetail"));
 const AdminLogin = lazy(() => import("@/features/admin/AdminLogin"));
@@ -70,6 +72,8 @@ const App = () => (
               <Route path="/checkout" element={<Checkout />} />
               <Route path="/checkout/success" element={<PaymentSuccess />} />
               <Route path="/profile" element={<Profile />} />
+              <Route path="/terms" element={<Terms />} />
+              <Route path="/privacy" element={<Privacy />} />
               <Route path="/admin/login" element={<AdminLogin />} />
               <Route path="/admin/dashboard" element={<Navigate to="/admin/users" replace />} />
               <Route path="/admin/users" element={<AdminUsers />} />
