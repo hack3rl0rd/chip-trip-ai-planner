@@ -44,23 +44,60 @@ interface DirectionResponse {
   overviewPolyline: string;
 }
 
+// Map page vẽ polyline cho mọi cặp pin của cả chuyến bằng Promise.all — nếu bắn thẳng sẽ là
+// ~N call /routes/direction cùng lúc → Goong 429. Giới hạn concurrency để drain theo từng đợt nhỏ,
+// và cache (CHỈ kết quả non-null) theo toạ độ làm tròn ~1m để khỏi gọi lại leg đã có.
+const MAX_DIRECTION_CONCURRENCY = 3;
+let activeDirections = 0;
+const directionWaiters: Array<() => void> = [];
+
+function acquireDirectionSlot(): Promise<void> {
+  if (activeDirections < MAX_DIRECTION_CONCURRENCY) {
+    activeDirections++;
+    return Promise.resolve();
+  }
+  return new Promise((resolve) => directionWaiters.push(resolve));
+}
+
+function releaseDirectionSlot(): void {
+  const next = directionWaiters.shift();
+  if (next) next();      // chuyển slot cho thread đang chờ — slot vẫn được tính, KHÔNG giảm
+  else activeDirections--;
+}
+
+const directionCache = new Map<string, DirectionResult>();
+const dirKey = (
+  o: { lat: number; lng: number },
+  d: { lat: number; lng: number },
+  v: string,
+) => `${o.lat.toFixed(5)},${o.lng.toFixed(5)}|${d.lat.toFixed(5)},${d.lng.toFixed(5)}|${v}`;
+
 export async function getDirection(
   origin: { lat: number; lng: number },
   dest: { lat: number; lng: number },
   vehicle: 'car' | 'bike' | 'taxi' | 'hd' = 'car',
 ): Promise<DirectionResult | null> {
+  const key = dirKey(origin, dest, vehicle);
+  const cached = directionCache.get(key);
+  if (cached) return cached;
+
+  await acquireDirectionSlot();
   try {
     const { data } = await apiClient.get<ApiResponse<DirectionResponse | null>>('/routes/direction', {
       params: { oLat: origin.lat, oLng: origin.lng, dLat: dest.lat, dLng: dest.lng, vehicle },
     });
-    if (!data.data) return null;
-    return {
+    if (!data.data) return null; // leg fail (Goong 429 → BE trả null): KHÔNG cache, thử lại lần render sau
+    const result: DirectionResult = {
       distance: data.data.distanceMeters,
       duration: data.data.durationSeconds,
       polyline: decodePolyline(data.data.overviewPolyline ?? ''),
     };
+    directionCache.set(key, result);
+    return result;
   } catch {
     return null;
+  } finally {
+    releaseDirectionSlot();
   }
 }
 
