@@ -30,26 +30,59 @@ export const authStorage = {
   },
 };
 
-let isRefreshing = false;
-let refreshSubscribers: Array<{
-  resolve: (token: string) => void;
-  reject: (error: unknown) => void;
-}> = [];
+let refreshPromise: Promise<string> | null = null;
 
-function subscribeTokenRefresh() {
-  return new Promise<string>((resolve, reject) => {
-    refreshSubscribers.push({ resolve, reject });
-  });
+/**
+ * Dùng chung cho HTTP interceptor và STOMP beforeConnect. Mọi request 401 xảy ra
+ * cùng lúc chỉ tạo đúng một request refresh token (single-flight).
+ */
+export function refreshAccessToken(): Promise<string> {
+  if (refreshPromise) return refreshPromise;
+
+  refreshPromise = (async () => {
+    const refreshToken = authStorage.getRefreshToken();
+    if (!refreshToken) throw new Error("No refresh token");
+
+    const { data } = await axios.post(`${BASE_URL}/auth/refresh`, { refreshToken });
+    const newAccessToken = data.data.accessToken as string;
+    authStorage.setAccessToken(newAccessToken);
+    if (data.data.refreshToken) {
+      authStorage.setRefreshToken(data.data.refreshToken);
+    }
+    window.dispatchEvent(new Event("chiptrip-auth-change"));
+    return newAccessToken;
+  })()
+    .catch((error) => {
+      authStorage.clear();
+      window.dispatchEvent(new Event("chiptrip-auth-change"));
+      if (window.location.pathname !== "/auth") window.location.href = "/auth";
+      throw error;
+    })
+    .finally(() => {
+      refreshPromise = null;
+    });
+
+  return refreshPromise;
 }
 
-function onTokenRefreshed(token: string) {
-  refreshSubscribers.forEach((subscriber) => subscriber.resolve(token));
-  refreshSubscribers = [];
+function isJwtExpiring(token: string, withinSeconds = 30): boolean {
+  try {
+    const payloadSegment = token.split(".")[1];
+    if (!payloadSegment) return true;
+    const encodedPayload = payloadSegment.replace(/-/g, "+").replace(/_/g, "/");
+    const paddedPayload = encodedPayload.padEnd(Math.ceil(encodedPayload.length / 4) * 4, "=");
+    const payload = JSON.parse(atob(paddedPayload)) as { exp?: number };
+    return typeof payload.exp === "number" && payload.exp <= Date.now() / 1000 + withinSeconds;
+  } catch {
+    return true;
+  }
 }
 
-function onTokenRefreshFailed(error: unknown) {
-  refreshSubscribers.forEach((subscriber) => subscriber.reject(error));
-  refreshSubscribers = [];
+/** Trả token còn hạn cho STOMP; refresh trước CONNECT nếu JWT sắp/hết hạn. */
+export function getValidAccessToken(): Promise<string> {
+  const token = authStorage.getAccessToken();
+  if (token && !isJwtExpiring(token)) return Promise.resolve(token);
+  return refreshAccessToken();
 }
 
 apiClient.interceptors.request.use((config) => {
@@ -66,38 +99,13 @@ apiClient.interceptors.response.use(
     const originalRequest = error.config;
 
     if (error.response?.status === 401 && !originalRequest._retry && authStorage.getRefreshToken()) {
-      if (isRefreshing) {
-        return subscribeTokenRefresh().then((token) => {
-          originalRequest.headers.Authorization = `Bearer ${token}`;
-          return apiClient(originalRequest);
-        });
-      }
-
       originalRequest._retry = true;
-      isRefreshing = true;
 
       try {
-        const refreshToken = authStorage.getRefreshToken();
-        if (!refreshToken) throw new Error("No refresh token");
-
-        const { data } = await axios.post(`${BASE_URL}/auth/refresh`, { refreshToken });
-        const newAccessToken = data.data.accessToken;
-        authStorage.setAccessToken(newAccessToken);
-        if (data.data.refreshToken) {
-          authStorage.setRefreshToken(data.data.refreshToken);
-        }
-        // Báo cho các WS socket (notifications, chat) reconnect với token mới
-        window.dispatchEvent(new Event("chiptrip-auth-change"));
-        onTokenRefreshed(newAccessToken);
-        isRefreshing = false;
-
+        const newAccessToken = await refreshAccessToken();
         originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;
         return apiClient(originalRequest);
       } catch (refreshError) {
-        isRefreshing = false;
-        onTokenRefreshFailed(refreshError);
-        authStorage.clear();
-        window.location.href = "/auth";
         return Promise.reject(refreshError);
       }
     }

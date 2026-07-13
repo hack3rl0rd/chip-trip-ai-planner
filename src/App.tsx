@@ -2,7 +2,6 @@ import { lazy, Suspense, useEffect } from "react";
 import { Toaster } from "sonner";
 import { Loader2 } from "lucide-react";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { AuthProvider } from "@/features/auth/useAuth";
 import { trackPageView } from "@/lib/analytics";
@@ -32,8 +31,6 @@ const AdminLogin = lazy(() => import("@/features/admin/AdminLogin"));
 const AdminChatInbox = lazy(() => import("@/features/admin/AdminChatInbox"));
 const NotFound = lazy(() => import("@/app/pages/NotFound"));
 
-const queryClient = new QueryClient();
-
 const RouteFallback = () => (
   <div className="min-h-screen bg-background flex items-center justify-center">
     <Loader2 className="w-8 h-8 animate-spin text-chip-orange" />
@@ -51,44 +48,42 @@ const RouteAnalytics = () => {
 };
 
 const App = () => (
-  <QueryClientProvider client={queryClient}>
-    <TooltipProvider>
-      <Toaster position="top-right" offset={{ top: 72, right: 16 }} />
-      <BrowserRouter>
-        <AuthProvider>
-          <RouteAnalytics />
-          <Suspense fallback={<RouteFallback />}>
-            <Routes>
-              <Route path="/" element={<Index />} />
-              <Route path="/planning" element={<Planning />} />
-              <Route path="/result" element={<Result />} />
-              <Route path="/saved" element={<SavedPlans />} />
-              <Route path="/explore" element={<ExplorePage />} />
-              <Route path="/trips/:tripId/public" element={<TripPublicViewPage />} />
-              <Route path="/trips/join/:token" element={<JoinTripPage />} />
-              <Route path="/location" element={<LocationDetail />} />
-              <Route path="/auth" element={<Auth />} />
-              <Route path="/premium" element={<Premium />} />
-              <Route path="/checkout" element={<Checkout />} />
-              <Route path="/checkout/success" element={<PaymentSuccess />} />
-              <Route path="/profile" element={<Profile />} />
-              <Route path="/terms" element={<Terms />} />
-              <Route path="/privacy" element={<Privacy />} />
-              <Route path="/admin/login" element={<AdminLogin />} />
-              <Route path="/admin/dashboard" element={<Navigate to="/admin/users" replace />} />
-              <Route path="/admin/users" element={<AdminUsers />} />
-              <Route path="/admin/users/:id" element={<AdminUserDetail />} />
-              <Route path="/admin/chat" element={<AdminChatInbox />} />
-              <Route path="*" element={<NotFound />} />
-            </Routes>
-          </Suspense>
-          <MobileNav />
-          <ChatWidget />
-          <UpgradeDialog />
-        </AuthProvider>
-      </BrowserRouter>
-    </TooltipProvider>
-  </QueryClientProvider>
+  <TooltipProvider>
+    <Toaster position="top-right" offset={{ top: 72, right: 16 }} />
+    <BrowserRouter>
+      <AuthProvider>
+        <RouteAnalytics />
+        <Suspense fallback={<RouteFallback />}>
+          <Routes>
+            <Route path="/" element={<Index />} />
+            <Route path="/planning" element={<Planning />} />
+            <Route path="/result" element={<Result />} />
+            <Route path="/saved" element={<SavedPlans />} />
+            <Route path="/explore" element={<ExplorePage />} />
+            <Route path="/trips/:tripId/public" element={<TripPublicViewPage />} />
+            <Route path="/trips/join/:token" element={<JoinTripPage />} />
+            <Route path="/location" element={<LocationDetail />} />
+            <Route path="/auth" element={<Auth />} />
+            <Route path="/premium" element={<Premium />} />
+            <Route path="/checkout" element={<Checkout />} />
+            <Route path="/checkout/success" element={<PaymentSuccess />} />
+            <Route path="/profile" element={<Profile />} />
+            <Route path="/terms" element={<Terms />} />
+            <Route path="/privacy" element={<Privacy />} />
+            <Route path="/admin/login" element={<AdminLogin />} />
+            <Route path="/admin/dashboard" element={<Navigate to="/admin/users" replace />} />
+            <Route path="/admin/users" element={<AdminUsers />} />
+            <Route path="/admin/users/:id" element={<AdminUserDetail />} />
+            <Route path="/admin/chat" element={<AdminChatInbox />} />
+            <Route path="*" element={<NotFound />} />
+          </Routes>
+        </Suspense>
+        <MobileNav />
+        <ChatWidget />
+        <UpgradeDialog />
+      </AuthProvider>
+    </BrowserRouter>
+  </TooltipProvider>
 );
 
 export default App;

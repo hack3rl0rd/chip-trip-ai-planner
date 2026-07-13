@@ -26,11 +26,14 @@ export function useTripDetail(id: number | null) {
     queryKey: queryKeys.tripDetail(id ?? -1),
     queryFn: () => tripsApi.getTripDetail(id!),
     enabled: id != null,
-    // Ngày 2..N enrich ảnh/review ngầm sau khi tạo trip → poll lại để chúng "nảy" ra dần.
-    // Dừng khi backend báo enriching=false, hoặc sau ~20 lần (≈80s) để không poll vô hạn nếu job nền chết.
+    // WS là tín hiệu chính; polling thưa dần chỉ là fallback khi client lỡ event hoặc vừa reconnect.
     refetchInterval: (query) => {
       const data = query.state.data as TripDetail | undefined;
-      if (data?.enriching && query.state.dataUpdateCount < 20) return 4000;
+      if (!data?.enriching) return false;
+      const updateCount = query.state.dataUpdateCount;
+      if (updateCount < 3) return 5_000;
+      if (updateCount < 6) return 10_000;
+      if (updateCount < 10) return 20_000;
       return false;
     },
   });

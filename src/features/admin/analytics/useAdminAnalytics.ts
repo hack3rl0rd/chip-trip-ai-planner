@@ -60,7 +60,6 @@ export const EVENT_LABELS: Record<string, string> = {
   generate_started: "Bắt đầu tạo plan",
   generate_succeeded: "Tạo plan thành công",
   generate_failed: "Tạo plan lỗi",
-  trip_saved: "Lưu chuyến đi",
   booking_click: "Click đặt chỗ",
   publish: "Công khai trip",
   purchase_started: "Bắt đầu mua",

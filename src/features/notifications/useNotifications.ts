@@ -97,8 +97,7 @@ export function useMarkAllRead() {
  * Mount ở 1 chỗ duy nhất (ví dụ trong AuthProvider wrapper hoặc App).
  * Reconnect tự động được handle bởi STOMP client (reconnectDelay).
  *
- * LƯU Ý: access token JWT 15 phút. Hook re-connect khi token thay đổi (qua event
- * "chiptrip-auth-change") để dùng token mới sau khi refresh.
+ * Shared STOMP client tự reconnect với token mới khi access token được refresh.
  */
 export function useNotificationSocket(onMessage?: (n: NotificationDto) => void) {
   const { user } = useAuth();
@@ -142,11 +141,7 @@ export function useNotificationSocket(onMessage?: (n: NotificationDto) => void) 
 
     connect();
 
-    const onAuthChange = () => connect();
-    window.addEventListener("chiptrip-auth-change", onAuthChange);
-
     return () => {
-      window.removeEventListener("chiptrip-auth-change", onAuthChange);
       handleRef.current?.disconnect();
       handleRef.current = null;
     };

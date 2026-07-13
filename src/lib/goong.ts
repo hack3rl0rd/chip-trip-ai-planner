@@ -112,21 +112,46 @@ interface DistanceMatrixResponse {
   segments: Array<{ distanceMeters: number; durationSeconds: number } | null>;
 }
 
+const distanceMatrixCache = new Map<string, Array<TravelSegment | null>>();
+const distanceMatrixInflight = new Map<string, Promise<Array<TravelSegment | null>>>();
+
+const matrixKey = (
+  points: Array<{ lat: number; lng: number }>,
+  vehicle: string,
+) => `${vehicle}|${points.map(p => `${p.lat.toFixed(5)},${p.lng.toFixed(5)}`).join("|")}`;
+
 export async function getConsecutiveTravelTimes(
   points: Array<{ lat: number; lng: number }>,
   vehicle: 'car' | 'bike' | 'taxi' | 'hd' = 'car',
 ): Promise<Array<TravelSegment | null>> {
   if (points.length < 2) return [];
-  try {
-    const { data } = await apiClient.post<ApiResponse<DistanceMatrixResponse>>(
-      '/routes/distance-matrix',
-      { points, vehicle },
-    );
-    const segs = data.data?.segments ?? [];
-    return segs.map(s => s ? { distance: s.distanceMeters, duration: s.durationSeconds } : null);
-  } catch {
-    return new Array(points.length - 1).fill(null);
-  }
+  const key = matrixKey(points, vehicle);
+  const cached = distanceMatrixCache.get(key);
+  if (cached) return cached;
+  const inflight = distanceMatrixInflight.get(key);
+  if (inflight) return inflight;
+
+  const request = (async () => {
+    try {
+      const { data } = await apiClient.post<ApiResponse<DistanceMatrixResponse>>(
+        '/routes/distance-matrix',
+        { points, vehicle },
+      );
+      if (!data.data) return new Array<TravelSegment | null>(points.length - 1).fill(null);
+      const segments = data.data.segments.map(s =>
+        s ? { distance: s.distanceMeters, duration: s.durationSeconds } : null
+      );
+      distanceMatrixCache.set(key, segments);
+      return segments;
+    } catch {
+      return new Array<TravelSegment | null>(points.length - 1).fill(null);
+    } finally {
+      distanceMatrixInflight.delete(key);
+    }
+  })();
+
+  distanceMatrixInflight.set(key, request);
+  return request;
 }
 
 // ─── Reverse Geocode → province name ─────────────────────────────────────────

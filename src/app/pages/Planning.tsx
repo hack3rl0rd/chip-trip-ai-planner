@@ -363,10 +363,7 @@ const Planning = () => {
       );
     };
     connect();
-    const onAuthChange = () => connect();
-    window.addEventListener("chiptrip-auth-change", onAuthChange);
     return () => {
-      window.removeEventListener("chiptrip-auth-change", onAuthChange);
       tripGenSocketRef.current?.disconnect();
       tripGenSocketRef.current = null;
       if (watchdogRef.current) clearTimeout(watchdogRef.current);

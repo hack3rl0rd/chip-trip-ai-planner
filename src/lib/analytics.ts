@@ -9,7 +9,6 @@ export type AnalyticsEvent =
   | "generate_started"
   | "generate_succeeded"
   | "generate_failed"
-  | "trip_saved"
   | "booking_click"
   | "publish"
   | "purchase_started"

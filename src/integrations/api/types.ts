@@ -245,6 +245,12 @@ export interface TripGenerationResult {
   error: string | null;
 }
 
+/** Báo hiệu backend đã enrich xong ảnh/review cho trip. */
+export interface TripEnrichmentResult {
+  tripId: number;
+  enriching: false;
+}
+
 export interface ShareTokenResponse {
   shareToken: string;
 }

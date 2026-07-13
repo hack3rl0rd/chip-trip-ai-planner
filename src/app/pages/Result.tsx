@@ -24,7 +24,9 @@ import GroupPanel from "@/features/result/GroupPanel";
 import SplitBill from "@/features/result/SplitBill";
 import { useAuth } from "@/features/auth/useAuth";
 import { tripsApi } from "@/integrations/api";
+import { authStorage } from "@/integrations/api/client";
 import type { ActivityDetail, TripDetail } from "@/integrations/api/types";
+import { connectTripEnrichmentSocket } from "@/integrations/ws/tripEnrichmentSocket";
 import type { ReplaceActivityResponse } from "@/integrations/api/modules/trips";
 import { queryKeys, useTripDetail, useSharedTrip, useCloneTrip, useEnableShare } from "@/hooks/useApi";
 import { usePublishTrip } from "@/features/explore/hooks/usePublicFeed";
@@ -169,6 +171,24 @@ const Result = () => {
   const enableShareMutation = useEnableShare();
   const publishMutation = usePublishTrip();
   const [isPublic, setIsPublic] = useState(false);
+  const userId = user?.id;
+
+  // Backend push khi ảnh/review đã enrich xong; polling trong useTripDetail chỉ còn là fallback.
+  useEffect(() => {
+    if (!userId || !detailTripId || sharedToken) return;
+    const token = authStorage.getAccessToken();
+    if (!token) return;
+    const socket = connectTripEnrichmentSocket(
+      token,
+      (result) => {
+        if (result.tripId === detailTripId) {
+          void queryClient.invalidateQueries({ queryKey: queryKeys.tripDetail(detailTripId) });
+        }
+      },
+      { onError: (message) => console.warn("Trip enrichment WS error:", message) }
+    );
+    return () => socket.disconnect();
+  }, [detailTripId, queryClient, sharedToken, userId]);
 
   // Sync trạng thái công khai từ trip detail
   useEffect(() => {
@@ -242,41 +262,67 @@ const Result = () => {
     }
   }, [tripFromState, sharedTrip, remoteTrip, tripIdFromState, activityOverrides]);
 
-  // Hiện tất cả địa điểm của cả hành trình trên map
-  const mappableItems = useMemo(
-    () => (trip ? trip.days.flatMap(d => d.items).filter(i => i.lat != null && i.lng != null) : []),
-    [trip]
+  // Map và route chỉ cần dữ liệu của ngày đang xem, tránh gọi Directions cho toàn bộ chuyến đi.
+  const activeDayGeoItems = useMemo(
+    () => (trip?.days[activeDay]?.items ?? [])
+      .map((item, idx) => ({ item, idx }))
+      .filter(({ item }) => item.lat != null && item.lng != null),
+    [trip, activeDay]
   );
   const mapPins: GoongMapPin[] = useMemo(
-    () => mappableItems.map(i => ({ lat: i.lat!, lng: i.lng!, title: i.title })),
-    [mappableItems]
+    () => activeDayGeoItems.map(({ item }) => ({ lat: item.lat!, lng: item.lng!, title: item.title })),
+    [activeDayGeoItems]
+  );
+  const routeCoordinateKey = useMemo(
+    () => mapPins.map(pin => `${pin.lat.toFixed(5)},${pin.lng.toFixed(5)}`).join("|"),
+    [mapPins]
+  );
+  const travelCoordinateKey = useMemo(
+    () => activeDayGeoItems
+      .map(({ item, idx }) => `${idx}:${item.lat!.toFixed(5)},${item.lng!.toFixed(5)}`)
+      .join("|"),
+    [activeDayGeoItems]
   );
 
-  // Fetch Direction polylines cho toàn bộ pins của hành trình
+  // Hash tọa độ ổn định: refresh ảnh/review không làm gọi lại Directions.
   useEffect(() => {
-    if (mapPins.length < 2) { setRoutePolylines([]); return; }
+    const points = routeCoordinateKey
+      ? routeCoordinateKey.split("|").map((pair) => {
+          const [lat, lng] = pair.split(",").map(Number);
+          return { lat, lng };
+        })
+      : [];
+    setRoutePolylines([]);
+    if (points.length < 2) return;
     let cancelled = false;
     (async () => {
       const results = await Promise.all(
-        mapPins.slice(0, -1).map((pin, i) =>
-          getDirection({ lat: pin.lat, lng: pin.lng }, { lat: mapPins[i + 1].lat, lng: mapPins[i + 1].lng })
+        points.slice(0, -1).map((point, i) =>
+          getDirection(point, points[i + 1])
         )
       );
       if (!cancelled) setRoutePolylines(results.map(r => r?.polyline ?? []));
     })();
     return () => { cancelled = true; };
-  }, [mapPins]);
+  }, [routeCoordinateKey]);
 
   // Fetch Distance Matrix for the active day's consecutive geocoded activities
   useEffect(() => {
-    if (!trip) return;
-    const dayItems = trip.days[activeDay]?.items ?? [];
-    const geoItems = dayItems.map((item, idx) => ({ item, idx })).filter(({ item }) => item.lat && item.lng);
+    const geoItems = travelCoordinateKey
+      ? travelCoordinateKey.split("|").map((entry) => {
+          const [rawIndex, coordinates] = entry.split(":");
+          const [lat, lng] = coordinates.split(",").map(Number);
+          return { idx: Number(rawIndex), lat, lng };
+        })
+      : [];
+    setTravelTimes(prev => Object.fromEntries(
+      Object.entries(prev).filter(([key]) => !key.startsWith(`${activeDay}-`))
+    ));
     if (geoItems.length < 2) return;
     let cancelled = false;
     (async () => {
       const segments = await getConsecutiveTravelTimes(
-        geoItems.map(({ item }) => ({ lat: item.lat!, lng: item.lng! }))
+        geoItems.map(({ lat, lng }) => ({ lat, lng }))
       );
       if (cancelled) return;
       setTravelTimes(prev => {
@@ -288,7 +334,7 @@ const Result = () => {
       });
     })();
     return () => { cancelled = true; };
-  }, [trip, activeDay]);
+  }, [activeDay, travelCoordinateKey]);
 
   const handleDayClick = useCallback((dayIdx: number) => {
     setActiveDay(dayIdx);
@@ -321,7 +367,6 @@ const Result = () => {
     // Trip is already saved via backend during generation — just mark as saved
     setSaved(true);
     setDbTripId(tripFromState?.id ? Number(tripFromState.id) : dbTripId);
-    trackEvent("trip_saved", { tripId: tripFromState?.id ? Number(tripFromState.id) : dbTripId });
     toast.success("Đã lưu kế hoạch!", {
       description: "Xem lại trong \"Chuyến đi của tôi\"",
       action: { label: "Xem ngay", onClick: () => navigate("/saved") },
@@ -628,7 +673,7 @@ const Result = () => {
                       pins={mapPins}
                       routes={routePolylines}
                       className="w-full h-full"
-                      onPinClick={(idx) => handleItemClick(mappableItems[idx])}
+                      onPinClick={(idx) => handleItemClick(activeDayGeoItems[idx].item)}
                     />
                   </div>
                 </div>

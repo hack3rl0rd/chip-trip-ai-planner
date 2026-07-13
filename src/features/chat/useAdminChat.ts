@@ -127,11 +127,8 @@ export function useAdminChatSocket(opts?: { onIncoming?: (m: MessageDto) => void
     };
 
     connect();
-    const onAuthChange = () => connect();
-    window.addEventListener("chiptrip-auth-change", onAuthChange);
 
     return () => {
-      window.removeEventListener("chiptrip-auth-change", onAuthChange);
       handleRef.current?.disconnect();
       handleRef.current = null;
     };

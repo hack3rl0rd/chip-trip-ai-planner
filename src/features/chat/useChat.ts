@@ -81,7 +81,7 @@ export function useMarkChatRead() {
  * Subscribe /user/queue/messages cho user thường. Tin mới được prepend
  * vào page đầu tiên của infinite history; nếu trùng id (đã optimistic) thì bỏ qua.
  *
- * Re-connect khi token refresh (event "chiptrip-auth-change").
+ * Shared STOMP client tự reconnect với token mới khi phiên được refresh.
  */
 export function useChatSocket(opts?: { onIncoming?: (m: MessageDto) => void }) {
   const { user, isAdmin } = useAuth();
@@ -121,11 +121,8 @@ export function useChatSocket(opts?: { onIncoming?: (m: MessageDto) => void }) {
     };
 
     connect();
-    const onAuthChange = () => connect();
-    window.addEventListener("chiptrip-auth-change", onAuthChange);
 
     return () => {
-      window.removeEventListener("chiptrip-auth-change", onAuthChange);
       handleRef.current?.disconnect();
       handleRef.current = null;
     };
