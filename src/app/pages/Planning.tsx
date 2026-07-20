@@ -65,6 +65,8 @@ const regions = [
       { name: "Hà Nội", emoji: "🏛️" }, { name: "Sapa", emoji: "🏔️" },
       { name: "Hạ Long", emoji: "🛶" }, { name: "Ninh Bình", emoji: "⛰️" },
       { name: "Hà Giang", emoji: "🌄" }, { name: "Mai Châu", emoji: "🌾" },
+      { name: "Hải Phòng", emoji: "⚓" }, { name: "Cao Bằng", emoji: "🏞️" },
+      { name: "Mộc Châu", emoji: "🌱" }, { name: "Tam Đảo", emoji: "🌫️" },
     ],
   },
   {
@@ -73,6 +75,8 @@ const regions = [
       { name: "Đà Nẵng", emoji: "🏖️" }, { name: "Hội An", emoji: "🏮" },
       { name: "Huế", emoji: "👑" }, { name: "Nha Trang", emoji: "🐚" },
       { name: "Quy Nhơn", emoji: "🌊" }, { name: "Phong Nha", emoji: "🦇" },
+      { name: "Phú Yên", emoji: "🌅" }, { name: "Mũi Né", emoji: "🏜️" },
+      { name: "Buôn Ma Thuột", emoji: "☕" }, { name: "Pleiku", emoji: "🌋" },
     ],
   },
   {
@@ -81,9 +85,46 @@ const regions = [
       { name: "Phú Quốc", emoji: "🌴" }, { name: "Đà Lạt", emoji: "🌸" },
       { name: "TP.HCM", emoji: "🏙️" }, { name: "Vũng Tàu", emoji: "⛱️" },
       { name: "Cần Thơ", emoji: "🚣" }, { name: "Côn Đảo", emoji: "🐢" },
+      { name: "Bến Tre", emoji: "🥥" }, { name: "An Giang", emoji: "🌾" },
+      { name: "Tây Ninh", emoji: "⛰️" }, { name: "Đồng Tháp", emoji: "🪷" },
     ],
   },
 ];
+
+type QuickPlaceSuggestionsProps = {
+  onSelect: (placeName: string) => void;
+};
+
+const QuickPlaceSuggestions = ({ onSelect }: QuickPlaceSuggestionsProps) => (
+  <div
+    className="absolute top-full left-0 right-0 mt-1 max-h-80 overflow-y-auto overscroll-contain rounded-xl border border-border bg-card p-1 shadow-warm z-20"
+    role="listbox"
+    aria-label="Gợi ý địa điểm phổ biến"
+  >
+    {regions.map((region) => (
+      <div key={region.label} role="group" aria-label={region.label}>
+        <div className="sticky top-0 z-10 flex items-center gap-2 bg-card/95 px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground backdrop-blur-sm">
+          <span aria-hidden="true">{region.emoji}</span>
+          <span>{region.label}</span>
+        </div>
+        {region.places.map((place) => (
+          <button
+            key={place.name}
+            type="button"
+            role="option"
+            aria-selected="false"
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={() => onSelect(place.name)}
+            className="w-full flex items-center gap-3 rounded-lg px-3 py-2.5 hover:bg-muted/50 focus-visible:bg-muted/50 focus-visible:outline-none transition-colors text-left text-sm"
+          >
+            <span aria-hidden="true">{place.emoji}</span>
+            <span className="font-medium text-foreground">{place.name}</span>
+          </button>
+        ))}
+      </div>
+    ))}
+  </div>
+);
 
 type Branch = null | "known" | "suggest";
 type SuggestedPlace = { name: string; desc: string; emoji: string };
@@ -191,8 +232,7 @@ const Planning = () => {
   const { predictions: originPredictions } = usePlaceAutocomplete(origin, originFocused);
   const { predictions: destPredictions } = usePlaceAutocomplete(destination, destFocused);
 
-  // Empty-state quick suggestions: khi focus + input trống, show 1 dải regions hardcode.
-  const quickSuggestions = regions.flatMap(r => r.places).slice(0, 6);
+  // Empty-state quick suggestions: khi focus + input trống, hiển thị đủ địa điểm theo vùng.
   const showOriginQuick = originFocused && origin.trim().length === 0;
   const showDestQuick = destFocused && destination.trim().length === 0;
 
@@ -526,13 +566,11 @@ const Planning = () => {
                   ))}
                 </div>
               ) : showOriginQuick ? (
-                <div className="absolute top-full left-0 right-0 mt-1 bg-card border border-border rounded-xl shadow-warm overflow-hidden z-20">
-                  {quickSuggestions.map(s => (
-                    <button key={s.name} onMouseDown={(e) => e.preventDefault()} onClick={() => { setOrigin(s.name); setOriginPlace(null); setOriginFocused(false); }} className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-muted/50 transition-colors text-left text-sm">
-                      <span>{s.emoji}</span><span className="font-medium text-foreground">{s.name}</span>
-                    </button>
-                  ))}
-                </div>
+                <QuickPlaceSuggestions onSelect={(placeName) => {
+                  setOrigin(placeName);
+                  setOriginPlace(null);
+                  setOriginFocused(false);
+                }} />
               ) : null}
             </div>
             <button onClick={swapOriginDest} className="w-10 h-10 rounded-full border-2 border-border bg-background flex items-center justify-center text-chip-orange hover:border-chip-orange hover:bg-chip-orange/10 transition-all shrink-0">
@@ -551,13 +589,11 @@ const Planning = () => {
                   ))}
                 </div>
               ) : showDestQuick ? (
-                <div className="absolute top-full left-0 right-0 mt-1 bg-card border border-border rounded-xl shadow-warm overflow-hidden z-20">
-                  {quickSuggestions.map(s => (
-                    <button key={s.name} onMouseDown={(e) => e.preventDefault()} onClick={() => { setDestination(s.name); setDestPlace(null); setDestFocused(false); }} className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-muted/50 transition-colors text-left text-sm">
-                      <span>{s.emoji}</span><span className="font-medium text-foreground">{s.name}</span>
-                    </button>
-                  ))}
-                </div>
+                <QuickPlaceSuggestions onSelect={(placeName) => {
+                  setDestination(placeName);
+                  setDestPlace(null);
+                  setDestFocused(false);
+                }} />
               ) : null}
             </div>
           </div>

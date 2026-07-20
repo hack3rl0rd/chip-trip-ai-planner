@@ -28,7 +28,7 @@ vi.mock("@/integrations/api", () => ({
   placesApi: {},
 }));
 
-describe("Planning generation recovery", () => {
+describe("Planning", () => {
   let container: HTMLDivElement;
   let root: Root;
 
@@ -63,5 +63,49 @@ describe("Planning generation recovery", () => {
     expect(container.textContent).toContain("AI đang tạo lịch trình");
     expect(container.textContent).toContain("Đà Nẵng");
     expect(container.textContent).not.toContain("Bạn đã có điểm đến chưa");
+  });
+
+  it("shows popular place suggestions from all three regions", async () => {
+    await act(async () => {
+      root.render(
+        <MemoryRouter initialEntries={["/planning"]}>
+          <Planning />
+        </MemoryRouter>,
+      );
+    });
+
+    const knownDestinationButton = Array.from(container.querySelectorAll("button"))
+      .find((button) => button.textContent?.includes("Có rồi"));
+    expect(knownDestinationButton).toBeDefined();
+
+    await act(async () => {
+      knownDestinationButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    const originInput = container.querySelector<HTMLInputElement>('input[placeholder="Điểm đi"]');
+    expect(originInput).not.toBeNull();
+
+    await act(async () => {
+      originInput?.dispatchEvent(new FocusEvent("focusin", { bubbles: true }));
+    });
+
+    const suggestionList = container.querySelector('[role="listbox"]');
+    expect(suggestionList).not.toBeNull();
+    expect(suggestionList?.querySelectorAll('[role="option"]')).toHaveLength(30);
+    expect(suggestionList?.textContent).toContain("Miền Bắc");
+    expect(suggestionList?.textContent).toContain("Miền Trung");
+    expect(suggestionList?.textContent).toContain("Miền Nam");
+    expect(suggestionList?.textContent).toContain("Phú Quốc");
+
+    const phuQuocOption = Array.from(suggestionList?.querySelectorAll("button") ?? [])
+      .find((button) => button.textContent?.includes("Phú Quốc"));
+    expect(phuQuocOption).toBeDefined();
+
+    await act(async () => {
+      phuQuocOption?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(originInput?.value).toBe("Phú Quốc");
+    expect(container.querySelector('[role="listbox"]')).toBeNull();
   });
 });
