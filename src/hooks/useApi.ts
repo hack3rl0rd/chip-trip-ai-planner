@@ -110,6 +110,10 @@ export function usePlaceDetail(id: number | null | undefined) {
     queryKey: ["placeDetail", id],
     queryFn: () => placesApi.getPlaceDetail(id!),
     enabled: id != null,
+    refetchInterval: (query) => {
+      const status = query.state.data?.photosStatus;
+      return status === "STALE" || status === "REFRESHING" ? 2_500 : false;
+    },
   });
 }
 

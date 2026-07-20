@@ -26,6 +26,8 @@ export interface PlacePhoto {
   thumbnail: string;
 }
 
+export type PhotoSyncStatus = "PENDING" | "READY" | "STALE" | "REFRESHING" | "FAILED";
+
 export interface OpeningHour {
   day: string;
   hours: string;
@@ -50,6 +52,9 @@ export interface PlaceDetail {
   openState: string | null;
   openingHours: OpeningHour[] | null;
   photos: PlacePhoto[] | null;
+  photosSyncedAt: string | null;
+  photosStatus: PhotoSyncStatus;
+  photoFailureCount: number;
   reviews: PlaceReview[] | null;
   phone: string | null;
   website: string | null;
@@ -59,6 +64,11 @@ export const placesApi = {
   getPlaceDetail: async (id: number) => {
     const { data } = await apiClient.get<ApiResponse<PlaceDetail>>(`/places/${id}`);
     return data.data;
+  },
+
+  /** Bao mot URL trong gallery bi browser tu choi/tai loi; backend se refresh anh o worker nen. */
+  reportPhotoFailure: async (id: number, url: string): Promise<void> => {
+    await apiClient.post(`/places/${id}/photos/failures`, { url });
   },
 
   /** Autocomplete điểm đến qua Goong (backend proxy). */

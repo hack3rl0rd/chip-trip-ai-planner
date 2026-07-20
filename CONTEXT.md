@@ -419,3 +419,9 @@ Hỏi lại người dùng (sinh viên dev này là người ra quyết định 
 ---
 
 *File này là "single source of truth" về dự án. Khi có thay đổi quan trọng (đổi stack, thêm tính năng vào MVP, sửa API contract), cập nhật vào đây trước khi bắt tay code.*
+
+### Cập nhật 2026-07-21 — Gallery ảnh tự phục hồi
+
+- `LocationDetail` loại URL lỗi khỏi hero, indicator, thumbnail và lightbox; nếu không còn ảnh provider thì chỉ hiển thị một fallback.
+- FE gọi `POST /api/v1/places/{placeCacheId}/photos/failures` một lần cho mỗi URL lỗi và refetch/poll trong lúc `photosStatus` là `STALE` hoặc `REFRESHING`.
+- Contract `PlaceDetail` bổ sung `photosSyncedAt`, `photosStatus`, `photoFailureCount`.

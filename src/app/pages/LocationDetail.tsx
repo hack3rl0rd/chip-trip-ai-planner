@@ -12,6 +12,8 @@ import { getPlaceImage, optimizePlaceImageUrl } from "@/features/planning/place-
 import { usePlaceDetail } from "@/hooks/useApi";
 import ChipTripReviews from "@/features/location/components/ChipTripReviews";
 import SafeImage from "@/components/SafeImage";
+import { filterUsablePhotos } from "@/features/location/photo-gallery";
+import { placesApi } from "@/integrations/api";
 
 gsap.registerPlugin(useGSAP);
 
@@ -42,6 +44,7 @@ const LocationDetail = () => {
   const destination = state?.destination as string | undefined;
   const rootRef = useRef<HTMLDivElement>(null);
   const closeBtnRef = useRef<HTMLButtonElement>(null);
+  const reportedImageUrlsRef = useRef<Set<string>>(new Set());
 
   const [activePhotoIndex, setActivePhotoIndex] = useState(0);
   const [isLightboxOpen, setIsLightboxOpen] = useState(false);
@@ -49,8 +52,13 @@ const LocationDetail = () => {
   const [failedImageUrls, setFailedImageUrls] = useState<Set<string>>(() => new Set());
 
   // Fetch cached rich details from SerpApi & Goong
-  const { data: placeDetail } = usePlaceDetail(item?.placeCacheId);
-  const photos = placeDetail?.photos || [];
+  const { data: placeDetail, refetch: refetchPlaceDetail } = usePlaceDetail(item?.placeCacheId);
+  const providerPhotos = placeDetail?.photos || [];
+  const photos = filterUsablePhotos(providerPhotos, failedImageUrls);
+
+  useEffect(() => {
+    setActivePhotoIndex((current) => photos.length === 0 ? 0 : Math.min(current, photos.length - 1));
+  }, [photos.length]);
 
   // Lightbox keyboard support — Esc closes, ←/→ navigate, focus moves to Close on open.
   useEffect(() => {
@@ -107,9 +115,17 @@ const LocationDetail = () => {
       next.add(url);
       return next;
     });
+
+    const placeCacheId = item.placeCacheId;
+    if (placeCacheId && !reportedImageUrlsRef.current.has(url)) {
+      reportedImageUrlsRef.current.add(url);
+      void placesApi.reportPhotoFailure(placeCacheId, url)
+        .then(() => refetchPlaceDetail())
+        .catch(() => {
+          // UI van loai anh loi ngay ca khi feedback endpoint tam thoi khong san sang.
+        });
+    }
   };
-  const safeImageUrl = (url: string | null | undefined, fallback: string) =>
-    url && !failedImageUrls.has(url) ? url : fallback;
 
   const baseConfig = bookingConfig[item.bookingType || "attraction"] || bookingConfig.attraction;
   const BookingIcon = baseConfig.icon;
@@ -183,7 +199,7 @@ const LocationDetail = () => {
             <div className="relative w-full h-full">
               <motion.img
                 key={activePhotoIndex}
-                src={optimizePlaceImageUrl(safeImageUrl(activePhoto?.url, fallbackHeroImage), 1600, 1000)}
+                src={optimizePlaceImageUrl(activePhoto?.url || fallbackHeroImage, 1600, 1000)}
                 alt={`${displayTitle} - Ảnh ${activePhotoIndex + 1}`}
                 width={1600}
                 height={1000}
@@ -232,7 +248,7 @@ const LocationDetail = () => {
           ) : (
             <SafeImage
               src={optimizePlaceImageUrl(
-                item.image && item.image !== "/placeholder.svg"
+                providerPhotos.length === 0 && item.image && item.image !== "/placeholder.svg" && !failedImageUrls.has(item.image)
                   ? item.image
                   : getPlaceImage(displayTitle, item.bookingType, 1600, 1000),
                 1600,
@@ -323,7 +339,7 @@ const LocationDetail = () => {
                       }`}
                     >
                       <SafeImage
-                        src={optimizePlaceImageUrl(safeImageUrl(photo.thumbnail, fallbackThumbImage), 160, 112)}
+                        src={optimizePlaceImageUrl(photo.thumbnail || photo.url, 160, 112)}
                         fallbackSrc={fallbackThumbImage}
                         alt=""
                         width={80}
@@ -548,8 +564,10 @@ const LocationDetail = () => {
               key={activePhotoIndex}
               src={optimizePlaceImageUrl(
                 photos.length > 0
-                  ? safeImageUrl(activePhoto?.url, fallbackHeroImage)
-                  : safeImageUrl(item.image && item.image !== "/placeholder.svg" ? item.image : null, fallbackHeroImage),
+                  ? activePhoto?.url || fallbackHeroImage
+                  : providerPhotos.length === 0 && item.image && item.image !== "/placeholder.svg" && !failedImageUrls.has(item.image)
+                    ? item.image
+                    : fallbackHeroImage,
                 1600,
                 1200,
               )}
@@ -604,7 +622,7 @@ const LocationDetail = () => {
                     }`}
                   >
                     <SafeImage
-                      src={optimizePlaceImageUrl(safeImageUrl(photo.thumbnail, fallbackThumbImage), 160, 120)}
+                      src={optimizePlaceImageUrl(photo.thumbnail || photo.url, 160, 120)}
                       fallbackSrc={fallbackThumbImage}
                       alt=""
                       width={64}
