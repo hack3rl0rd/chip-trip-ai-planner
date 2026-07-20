@@ -262,6 +262,18 @@ const Result = () => {
     }
   }, [tripFromState, sharedTrip, remoteTrip, tripIdFromState, activityOverrides]);
 
+  // Ghim tripId vào URL (?id=) khi đã biết chuyến nhưng URL chưa có id (vd: vào bằng state, hoặc
+  // param bị rớt). Nhờ vậy khi mở /location rồi back → Result remount vẫn còn id để tải lại,
+  // tránh kẹt mãi ở màn "Đang dựng lịch trình…". Giữ nguyên state để không mất context điều hướng.
+  useEffect(() => {
+    if (sharedToken || !dbTripId || urlTripId) return;
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.set("id", String(dbTripId));
+      return next;
+    }, { replace: true, state });
+  }, [dbTripId, urlTripId, sharedToken, setSearchParams, state]);
+
   // Map và route chỉ cần dữ liệu của ngày đang xem, tránh gọi Directions cho toàn bộ chuyến đi.
   const activeDayGeoItems = useMemo(
     () => (trip?.days[activeDay]?.items ?? [])
@@ -342,12 +354,12 @@ const Result = () => {
       const next = new URLSearchParams(prev);
       next.set("day", String(dayIdx));
       return next;
-    }, { replace: true });
+    }, { replace: true, state });
     const btn = dayButtonRefs.current[dayIdx];
     if (btn) {
       btn.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
     }
-  }, [setSearchParams]);
+  }, [setSearchParams, state]);
 
   useEffect(() => {
     if (dbTripId) {
@@ -599,6 +611,27 @@ const Result = () => {
           <h2 className="text-xl font-display font-bold text-foreground">{message}</h2>
           <p className="text-muted-foreground max-w-sm">
             Lịch trình này có thể thuộc về người khác hoặc đã bị xóa.
+          </p>
+          <div className="flex gap-3">
+            <Button variant="hero" onClick={() => navigate("/saved")}>Chuyến đi của tôi</Button>
+            <Button variant="soft" onClick={() => navigate("/")}>Về trang chủ</Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // URL mất ?id= (và không có shared/state/dbTripId) → không có nguồn nào để tải → báo lỗi rõ ràng
+  // thay vì spin "Đang dựng lịch trình…" vô hạn. Chuyến KHÔNG mất, chỉ cần mở lại từ "Chuyến đi của tôi".
+  if (!sharedToken && detailTripId == null && !trip) {
+    return (
+      <div className="min-h-screen bg-paper">
+        <Navbar />
+        <div className="flex flex-col items-center justify-center pt-40 gap-4 px-6 text-center">
+          <div className="text-5xl">🔍</div>
+          <h2 className="text-xl font-display font-bold text-foreground">Không xác định được lịch trình</h2>
+          <p className="text-muted-foreground max-w-sm">
+            Liên kết bị thiếu mã chuyến. Lịch trình của bạn vẫn còn — mở lại từ “Chuyến đi của tôi” nhé.
           </p>
           <div className="flex gap-3">
             <Button variant="hero" onClick={() => navigate("/saved")}>Chuyến đi của tôi</Button>

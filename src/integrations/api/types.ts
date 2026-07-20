@@ -239,7 +239,17 @@ export type TripGenerateResponse = TripDetail;
 
 /** Kết quả sinh lịch trình async đẩy qua WebSocket (/user/queue/trip-generation). */
 export interface TripGenerationResult {
+  generationId: string;
   status: "DONE" | "FAILED";
+  tripId: number | null;
+  geocodeFailedCount: number | null;
+  error: string | null;
+}
+
+/** Trạng thái có thể truy vấn để khôi phục job generate sau F5 hoặc khi lỡ WebSocket push. */
+export interface TripGenerationStatus {
+  generationId: string | null;
+  status: "IDLE" | "RUNNING" | "DONE" | "FAILED";
   tripId: number | null;
   geocodeFailedCount: number | null;
   error: string | null;

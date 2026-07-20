@@ -10,6 +10,11 @@ import { openUpgrade } from "@/features/premium/upgradeStore";
 import { computeTripDays, exceedsDays, exceedsStyles, generateGateReason } from "@/features/premium/limits";
 import { tripsApi, aiApi, placesApi, type PlaceLookupResult, type PlacePrediction } from "@/integrations/api";
 import { usePlaceAutocomplete } from "@/features/planning/usePlaceAutocomplete";
+import {
+  clearPendingTripGeneration,
+  loadPendingTripGeneration,
+  savePendingTripGeneration,
+} from "@/features/planning/trip-generation-state";
 import { analyticsError, trackEvent } from "@/lib/analytics";
 import { toast } from "sonner";
 import { connectTripGenerationSocket, type TripGenerationSocketHandle } from "@/integrations/ws/tripGenerationSocket";
@@ -88,12 +93,13 @@ const getTodayInputValue = () => {
   return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
 };
 
-/** Phòng khi WS push thất lạc: sau ngần này chưa nhận kết quả thì báo lỗi mềm (trip có thể đã được tạo). */
-const GENERATE_WATCHDOG_MS = 180_000;
+const GENERATION_STATUS_POLL_MS = 2_000;
+const GENERATION_START_GRACE_MS = 35_000;
 
 const Planning = () => {
   const navigate = useNavigate();
   const { user, loading: authLoading } = useAuth();
+  const userId = user?.id;
   const { data: ent } = useEntitlements();
   const invalidateEntitlements = useInvalidateEntitlements();
 
@@ -124,9 +130,25 @@ const Planning = () => {
 
   // Async generate: chờ kết quả qua WebSocket thay vì giữ một HTTP request dài.
   const pendingAnalyticsRef = useRef<Record<string, unknown> | null>(null);
-  const watchdogRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingGenerationIdRef = useRef<string | null>(null);
+  const pendingStartedAtRef = useRef<number | null>(null);
   const tripGenSocketRef = useRef<TripGenerationSocketHandle | null>(null);
   const onGenResultRef = useRef<(r: TripGenerationResult) => void>(() => {});
+
+  // React state mất khi F5/đổi route; marker localStorage giúp khôi phục đúng màn hình chờ.
+  useEffect(() => {
+    if (!userId) return;
+    const pending = loadPendingTripGeneration(userId);
+    if (!pending) return;
+
+    pendingAnalyticsRef.current = pending.analyticsPayload;
+    pendingGenerationIdRef.current = pending.generationId;
+    pendingStartedAtRef.current = pending.startedAt;
+    setDestination(pending.destination);
+    setBranch("known");
+    setError(null);
+    setIsLoading(true);
+  }, [userId]);
 
   // Suggest flow state
   const [vibes, setVibes] = useState<string[]>([]);
@@ -287,6 +309,22 @@ const Planning = () => {
       stylesCount: styles.length,
       budgetVnd,
     };
+    if (!userId) {
+      navigate("/auth", { state: { from: "/planning" } });
+      return;
+    }
+
+    const startedAt = Date.now();
+    const generationId = crypto.randomUUID();
+    pendingAnalyticsRef.current = analyticsPayload;
+    pendingGenerationIdRef.current = generationId;
+    pendingStartedAtRef.current = startedAt;
+    savePendingTripGeneration(userId, {
+      generationId,
+      startedAt,
+      destination,
+      analyticsPayload,
+    });
     trackEvent("generate_started", analyticsPayload);
     try {
       await tripsApi.generateAsync({
@@ -301,24 +339,23 @@ const Planning = () => {
         styles,
         peopleCount: travelers,
         tickets: travelers,
-      });
-      // BE đã nhận (202). Kết quả tới qua WebSocket (onGenResultRef). Bật watchdog phòng push thất lạc.
-      pendingAnalyticsRef.current = analyticsPayload;
-      if (watchdogRef.current) clearTimeout(watchdogRef.current);
-      watchdogRef.current = setTimeout(() => {
-        if (!pendingAnalyticsRef.current) return;
-        pendingAnalyticsRef.current = null;
-        watchdogRef.current = null;
-        setIsLoading(false);
-        setError(
-          "AI mất quá nhiều thời gian xử lý. Lịch trình có thể đã được tạo — kiểm tra trong 'Chuyến đi của tôi', hoặc thử lại."
-        );
-      }, GENERATE_WATCHDOG_MS);
+      }, generationId);
+      // BE đã nhận (202). Kết quả tới qua WS; polling trạng thái bên dưới là fallback đáng tin cậy.
     } catch (err: any) {
       // Lỗi validate đồng bộ (hết lượt 402 / dữ liệu 400 / rate limit 429) hoặc lỗi mạng khi gửi yêu cầu.
+      if (!err.response) {
+        // Request có thể đã tới BE dù client mất response. Giữ loading + marker để polling xác nhận,
+        // tránh báo thất bại trong khi worker vẫn đang tạo và persist trip.
+        console.warn("Generate request response was lost; waiting for generation status:", err);
+        return;
+      }
       console.error("AI generation request failed:", err);
       trackEvent("generate_failed", { ...analyticsPayload, ...analyticsError(err) });
       const msg = err.response?.data?.message || err.message || "Tạo lịch trình thất bại, vui lòng thử lại";
+      clearPendingTripGeneration(userId);
+      pendingAnalyticsRef.current = null;
+      pendingGenerationIdRef.current = null;
+      pendingStartedAtRef.current = null;
       setError(msg);
       setIsLoading(false);
     }
@@ -327,12 +364,13 @@ const Planning = () => {
   // Gán mỗi render để luôn dùng navigate/state mới nhất; socket effect chỉ gọi qua ref nên không re-subscribe.
   onGenResultRef.current = (result: TripGenerationResult) => {
     const analyticsPayload = pendingAnalyticsRef.current;
-    if (!analyticsPayload) return; // không có job đang đợi → bỏ qua (stale)
-    if (watchdogRef.current) {
-      clearTimeout(watchdogRef.current);
-      watchdogRef.current = null;
+    if (!analyticsPayload || result.generationId !== pendingGenerationIdRef.current) {
+      return; // không có job đang đợi hoặc kết quả thuộc job cũ → bỏ qua
     }
     pendingAnalyticsRef.current = null;
+    pendingGenerationIdRef.current = null;
+    pendingStartedAtRef.current = null;
+    if (userId) clearPendingTripGeneration(userId);
     setIsLoading(false);
     if (result.status === "DONE" && result.tripId != null) {
       trackEvent("generate_succeeded", { ...analyticsPayload, tripId: result.tripId });
@@ -342,12 +380,65 @@ const Planning = () => {
           description: "Lịch trình vẫn dùng được; một vài hoạt động có thể chưa hiện trên bản đồ.",
         });
       }
-      navigate("/result", { state: { tripId: result.tripId } });
+      navigate(`/result?id=${result.tripId}`);
     } else {
       trackEvent("generate_failed", { ...analyticsPayload, reason: result.error ?? "unknown" });
       setError(result.error || "Tạo lịch trình thất bại, vui lòng thử lại");
     }
   };
+
+  // WS là đường nhanh; polling đảm bảo F5/reconnect hoặc push thất lạc vẫn lấy được kết quả.
+  useEffect(() => {
+    if (!userId || !isLoading) return;
+
+    let cancelled = false;
+    let checking = false;
+    const checkStatus = async () => {
+      if (checking) return;
+      checking = true;
+      try {
+        const status = await tripsApi.getGenerationStatus();
+        if (cancelled) return;
+
+        const pending = loadPendingTripGeneration(userId);
+        const generationId = pending?.generationId ?? pendingGenerationIdRef.current;
+        const startedAt = pending?.startedAt ?? pendingStartedAtRef.current;
+        if (!generationId || status.generationId !== generationId) {
+          if (!startedAt || Date.now() - startedAt >= GENERATION_START_GRACE_MS) {
+            clearPendingTripGeneration(userId);
+            pendingAnalyticsRef.current = null;
+            pendingGenerationIdRef.current = null;
+            pendingStartedAtRef.current = null;
+            setIsLoading(false);
+            setError("Không tìm thấy tiến trình đang tạo. Vui lòng thử tạo lại lịch trình.");
+          }
+          return;
+        }
+
+        if (status.status === "DONE" || status.status === "FAILED") {
+          onGenResultRef.current({
+            generationId: status.generationId,
+            status: status.status,
+            tripId: status.tripId,
+            geocodeFailedCount: status.geocodeFailedCount,
+            error: status.error,
+          });
+          return;
+        }
+      } catch {
+        // Mất polling tạm thời không được làm văng màn hình; WS/retry kế tiếp vẫn có thể hoàn tất.
+      } finally {
+        checking = false;
+      }
+    };
+
+    void checkStatus();
+    const interval = window.setInterval(() => void checkStatus(), GENERATION_STATUS_POLL_MS);
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, [isLoading, userId]);
 
   // Kết nối WS nhận kết quả generate khi ở trang Planning; subscribe sẵn để không lỡ push.
   useEffect(() => {
@@ -366,7 +457,6 @@ const Planning = () => {
     return () => {
       tripGenSocketRef.current?.disconnect();
       tripGenSocketRef.current = null;
-      if (watchdogRef.current) clearTimeout(watchdogRef.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id]);
@@ -749,7 +839,7 @@ const Planning = () => {
                 </div>
                 <h2 className="text-2xl font-bold text-foreground">AI đang tạo lịch trình...</h2>
                 <p className="text-muted-foreground">Chip Trip đang tìm kiếm lịch trình hoàn hảo cho <span className="font-semibold text-chip-orange">{destination}</span></p>
-                <p className="text-xs text-muted-foreground">Có thể mất 1–2 phút. Vui lòng giữ nguyên trang — lượt chỉ bị trừ khi lịch trình tạo xong.</p>
+                <p className="text-xs text-muted-foreground">Có thể mất 1–2 phút. Bạn có thể tải lại trang; tiến trình sẽ được khôi phục tự động và lượt chỉ bị trừ khi lịch trình tạo xong.</p>
               </motion.div>
             ) : error ? (
               <motion.div key="error" initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="flex flex-col items-center justify-center min-h-[60vh] gap-6 text-center">
